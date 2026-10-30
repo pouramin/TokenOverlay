@@ -98,7 +98,33 @@ try
         Check(codex?.LastDuration==TimeSpan.FromSeconds(56),"Codex timer");
     }
     finally{File.Delete(codexLog);}
-    Console.WriteLine("PASS: OpenCode V1 + V2, parent/child totals, model, duration, Claude and Codex.");
+
+    var manifestRoot=Path.Combine(Path.GetTempPath(),"tl-manifest-"+Guid.NewGuid().ToString("N"));
+    var transcriptRoot=Path.Combine(Path.GetTempPath(),"tl-project-"+Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(manifestRoot);Directory.CreateDirectory(transcriptRoot);
+    try
+    {
+        var transcriptId=Guid.NewGuid().ToString();
+        File.WriteAllLines(Path.Combine(transcriptRoot,transcriptId+".jsonl"),
+            new[]{userLine,assistantLine,
+                JsonSerializer.Serialize(new{type="system",subtype="turn_duration",durationMs=12300})});
+        var metadata=JsonSerializer.Serialize(new {
+            cliSessionId=transcriptId,title="Tunnel Coffee landing page",
+            lastActivityAt=DateTimeOffset.UtcNow.ToString("O")
+        });
+        File.WriteAllText(Path.Combine(manifestRoot,"local_test.json"),metadata);
+        var c=ClaudeDesktopReader.Read("Tunnel Coffee landing page",
+            new[]{manifestRoot},new[]{transcriptRoot});
+        Check(c?.SessionName=="Tunnel Coffee landing page","Claude Desktop manifest title mapping");
+        Check(c?.Total==90,"Claude Desktop correct manifest transcript");
+        Check(c?.Note?.Contains("Title matched")==true,"Claude title match disclosure");
+    }
+    finally
+    {
+        Directory.Delete(manifestRoot,true);Directory.Delete(transcriptRoot,true);
+    }
+
+    Console.WriteLine("PASS: OpenCode V1/V2, manual mapping, Claude Desktop metadata and Codex.");
 }
 finally
 {

@@ -37,6 +37,8 @@ internal sealed class OverlayController:ApplicationContext
     private int _offsetX,_offsetY;
     private Rectangle _lastWindow;
     private string? _windowTitle;
+    private string? _selectedOpenCodeSession;
+    private readonly ToolStripMenuItem _sessionChooser = new("OpenCode session");
 
     private sealed class Preferences
     {
@@ -90,6 +92,8 @@ internal sealed class OverlayController:ApplicationContext
             sources.DropDownItems.Add(item);
         }
         _menu.Items.Add(sources);
+        _sessionChooser.DropDownOpening+=(_,_)=>RefreshOpenCodeSessions();
+        _menu.Items.Add(_sessionChooser);
         var pos=new ToolStripMenuItem("Position");
         var top=new ToolStripMenuItem("Top-right");
         var bottom=new ToolStripMenuItem("Bottom-right (default)");
@@ -119,6 +123,33 @@ internal sealed class OverlayController:ApplicationContext
         _timer.Tick+=(_,_)=>Tick();
         _timer.Start();
         Tick();
+    }
+
+    private void RefreshOpenCodeSessions()
+    {
+        _sessionChooser.DropDownItems.Clear();
+        var automatic=new ToolStripMenuItem("Auto (latest / title match)")
+            {Checked=_selectedOpenCodeSession is null};
+        automatic.Click+=(_,_)=>{
+            _selectedOpenCodeSession=null;
+            _snapshot=null;
+            _lastRead=DateTime.MinValue;
+        };
+        _sessionChooser.DropDownItems.Add(automatic);
+        foreach(var (id,title) in OpenCodeReader.RecentSessions())
+        {
+            var display=title.Length>52?title[..49]+"...":title;
+            var captured=id;
+            var choice=new ToolStripMenuItem(display){Checked=_selectedOpenCodeSession==id};
+            choice.Click+=(_,_)=>{
+                _selectedOpenCodeSession=captured;
+                _snapshot=null;
+                _lastRead=DateTime.MinValue;
+            };
+            _sessionChooser.DropDownItems.Add(choice);
+        }
+        if(_sessionChooser.DropDownItems.Count==1)
+            _sessionChooser.DropDownItems.Add(new ToolStripMenuItem("No local sessions found"){Enabled=false});
     }
 
     private void SyncMenu()
@@ -186,8 +217,9 @@ internal sealed class OverlayController:ApplicationContext
             try
             {
                 return capturedSource==SourceKind.OpenCode
-                    ?OpenCodeReader.Read(windowTitle:capturedTitle)
-                    :TranscriptReader.Read(capturedSource);
+                    ?OpenCodeReader.Read(windowTitle:capturedTitle,
+                        selectedSessionId:_selectedOpenCodeSession)
+                    :TranscriptReader.Read(capturedSource,capturedTitle);
             }
             catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
                 or InvalidOperationException or ArgumentException)

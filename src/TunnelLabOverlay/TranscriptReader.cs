@@ -5,10 +5,11 @@ namespace TunnelLab.TokenOverlay;
 
 internal static class TranscriptReader
 {
-    public static UsageSnapshot? Read(SourceKind source)
+    public static UsageSnapshot? Read(SourceKind source,string? windowTitle=null)
     {
-        if (source == SourceKind.OpenCode) return OpenCodeReader.Read();
-        var root = source == SourceKind.Codex ? LocalPaths.CodexRoot : LocalPaths.ClaudeRoot;
+        if (source == SourceKind.OpenCode) return OpenCodeReader.Read(windowTitle:windowTitle);
+        if (source == SourceKind.Claude) return ClaudeDesktopReader.Read(windowTitle);
+        var root = LocalPaths.CodexRoot;
         if (!Directory.Exists(root)) return null;
         string? newest = null;
         var lastWrite = DateTime.MinValue;

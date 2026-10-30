@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>TokenOverlay</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>TunnelLab</Authors>
     <Description>Local-only token usage overlay for Codex, Claude Code and OpenCode desktop.</Description>
 </PropertyGroup>

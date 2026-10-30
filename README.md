@@ -51,3 +51,9 @@ The source does not copy the old overlay implementation. Older release tags and 
 ## 1.1.0 UI and compatibility update
 
 The overlay defaults to the bottom-right of the active app to avoid toolbar buttons. Drag the header to position it anywhere; the offset is saved locally. The floating bar is 302px wide and the × button exits immediately. OpenCode supports both legacy and new SQLite session/message tables, and checks additional Windows data directories. When no reliable usage record exists, the program displays **No data**, never a misleading 0. Stale timestamps do not produce multi-day timers. In Claude Desktop the latest local Claude Code JSONL is not necessarily the current cloud chat, so local numbers may not match the visible tab.
+
+## v1.2.0 — session selection and Claude Desktop
+
+- **OpenCode session picker:** Right-click the tray icon, select **OpenCode session**, then choose the exact session by title. The newest session is used automatically unless you explicitly choose one. This avoids confusing a freshly modified unrelated conversation with the visible one.
+- **Claude Desktop Code-tab:** reads local Desktop manifests (`cliSessionId`, `title`, `lastActivityAt`) from both normal roaming storage and Windows MSIX package storage, then associates the selected metadata with its actual local JSONL transcript. Ordinary CLI transcripts with no Desktop manifest are no longer displayed as though they belonged to the Desktop tab.
+- Claude Desktop lacks a supported public active-tab API. **Recent local** and **historical local** are labelled accordingly. Cloud chats are not tracked.

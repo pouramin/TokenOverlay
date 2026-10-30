@@ -15,18 +15,18 @@ internal static class OpenCodeReader
         public static Counts Empty=>new(0,0,0,0,0,0,0);
     }
 
-    public static UsageSnapshot? Read(string? databasePath=null,string? windowTitle=null)
+    public static UsageSnapshot? Read(string? databasePath=null,string? windowTitle=null,string? selectedSessionId=null)
     {
         var paths=databasePath is { Length: > 0 }?new []{databasePath}:LocalPaths.OpenCodeDatabases;
         foreach(var path in paths.Where(File.Exists).OrderByDescending(p=>File.GetLastWriteTimeUtc(p)))
         {
-            var item=ReadOne(path,windowTitle);
+            var item=ReadOne(path,windowTitle,selectedSessionId);
             if(item is not null)return item;
         }
         return null;
     }
 
-    private static UsageSnapshot? ReadOne(string path,string? windowTitle)
+    private static UsageSnapshot? ReadOne(string path,string? windowTitle,string? selectedSessionId)
     {
         try
         {
@@ -51,10 +51,12 @@ internal static class OpenCodeReader
             foreach(var source in candidates.OrderByDescending(c=>c.Rows.Max(s=>s.Updated)))
             {
                 var rows=source.Rows;
+                var pinned=selectedSessionId is null?null:rows.FirstOrDefault(s=>s.Id==selectedSessionId);
+                if(selectedSessionId is not null && pinned is null)continue;
                 var match=rows.Where(s=>string.IsNullOrWhiteSpace(s.Parent))
                     .OrderByDescending(s=>s.Updated)
                     .FirstOrDefault(s=>TitleMatches(s.Title,windowTitle));
-                var newest=match??rows.OrderByDescending(s=>s.Updated).First();
+                var newest=pinned??match??rows.OrderByDescending(s=>s.Updated).First();
                 var byId=rows.ToDictionary(s=>s.Id,StringComparer.Ordinal);
                 var root=newest;
                 var seen=new HashSet<string>(StringComparer.Ordinal){root.Id};
@@ -83,7 +85,8 @@ internal static class OpenCodeReader
                 if(all.Messages==0 && all.Total==0)continue;
                 var timing=Turn(db,source.Messages,root.Id);
                 var model=Model(db,source.Messages,root.Id);
-                var note=(match is not null?"Matched window title":"Latest local session")
+                var note=(pinned is not null?"Selected session"
+                    :match is not null?"Matched window title":"Latest local session")
                     +" | "+Path.GetFileName(path)+" ("+source.Sessions+")";
                 return new UsageSnapshot(SourceKind.OpenCode,root.Id,root.Title,model,
                     all.Input,all.Read,all.Write,all.Output,all.Reasoning,0,0,
@@ -94,6 +97,30 @@ internal static class OpenCodeReader
         catch(Exception ex) when(ex is SqliteException or IOException or UnauthorizedAccessException
             or JsonException or InvalidOperationException or ArgumentException or FormatException) { }
         return null;
+    }
+
+    public static IReadOnlyList<(string Id,string Title)> RecentSessions()
+    {
+        var entries=new List<Row>();
+        foreach(var path in LocalPaths.OpenCodeDatabases.Where(File.Exists))
+        {
+            try
+            {
+                using var db=new SqliteConnection(new SqliteConnectionStringBuilder {
+                    DataSource=path,Mode=SqliteOpenMode.ReadOnly,Pooling=false
+                }.ToString());
+                db.Open();
+                foreach(var table in new[]{"session_v2","session"})
+                    if(Columns(db,table).Contains("id"))
+                        entries.AddRange(Sessions(db,table)
+                            .Where(x=>string.IsNullOrWhiteSpace(x.Parent)).Take(30));
+            }
+            catch(Exception ex) when(ex is SqliteException or IOException
+                or UnauthorizedAccessException or InvalidOperationException){}
+        }
+        return entries.OrderByDescending(s=>s.Updated)
+            .DistinctBy(s=>s.Id)
+            .Take(20).Select(s=>(s.Id,s.Title)).ToArray();
     }
 
     private static bool TitleMatches(string sessionTitle,string? windowTitle)

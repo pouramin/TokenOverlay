@@ -7,5 +7,6 @@
 <Compile Include="../../src/TunnelLabOverlay/Models.cs" Link="Models.cs" />
 <Compile Include="../../src/TunnelLabOverlay/OpenCodeReader.cs" Link="OpenCodeReader.cs" />
 <Compile Include="../../src/TunnelLabOverlay/TranscriptReader.cs" Link="TranscriptReader.cs" />
+<Compile Include="../../src/TunnelLabOverlay/ClaudeDesktopReader.cs" Link="ClaudeDesktopReader.cs" />
 </ItemGroup>
 </Project>

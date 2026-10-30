@@ -120,8 +120,16 @@ internal static class TranscriptReader
                 {
                     var messageId=Str(msg,"id")??Str(j,"uuid");
                     if(messageId is null)continue;
-                    usage[messageId]=(Num(used,"input_tokens"),Num(used,"cache_read_input_tokens"),
-                        Num(used,"cache_creation_input_tokens"),Num(used,"output_tokens"));
+                    var current=(Input:Num(used,"input_tokens"),
+                        Read:Num(used,"cache_read_input_tokens"),
+                        Write:Num(used,"cache_creation_input_tokens"),
+                        Output:Num(used,"output_tokens"));
+                    if(usage.TryGetValue(messageId,out var previous))
+                        usage[messageId]=(Math.Max(previous.Input,current.Input),
+                            Math.Max(previous.Read,current.Read),
+                            Math.Max(previous.Write,current.Write),
+                            Math.Max(previous.Output,current.Output));
+                    else usage[messageId]=current;
                 }
                 else if(kind=="user"&&j.TryGetProperty("message",out var userMessage)&&userMessage.ValueKind==JsonValueKind.Object
                          &&userMessage.TryGetProperty("content",out var content)&&

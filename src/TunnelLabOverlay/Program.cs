@@ -38,7 +38,9 @@ internal sealed class OverlayController:ApplicationContext
     private Rectangle _lastWindow;
     private string? _windowTitle;
     private string? _selectedOpenCodeSession;
+    private string? _selectedClaudeTranscript;
     private readonly ToolStripMenuItem _sessionChooser = new("OpenCode session");
+    private readonly ToolStripMenuItem _claudeChooser = new("Claude session");
 
     private sealed class Preferences
     {
@@ -95,6 +97,8 @@ internal sealed class OverlayController:ApplicationContext
         _menu.Items.Add(sources);
         _sessionChooser.DropDownOpening+=(_,_)=>RefreshOpenCodeSessions();
         _menu.Items.Add(_sessionChooser);
+        _claudeChooser.DropDownOpening+=(_,_)=>RefreshClaudeSessions();
+        _menu.Items.Add(_claudeChooser);
         var pos=new ToolStripMenuItem("Position");
         var top=new ToolStripMenuItem("Top-right");
         var bottom=new ToolStripMenuItem("Bottom-right (default)");
@@ -157,6 +161,38 @@ internal sealed class OverlayController:ApplicationContext
         }
         if(_sessionChooser.DropDownItems.Count==1)
             _sessionChooser.DropDownItems.Add(new ToolStripMenuItem("No local sessions found"){Enabled=false});
+    }
+
+    private void RefreshClaudeSessions()
+    {
+        _claudeChooser.DropDownItems.Clear();
+        var automatic=new ToolStripMenuItem("Auto (best effort; tab not guaranteed)")
+            {Checked=_selectedClaudeTranscript is null};
+        automatic.Click+=(_,_)=>{
+            _selectedClaudeTranscript=null;
+            _snapshot=null;
+            _lastRead=DateTime.MinValue;
+        };
+        _claudeChooser.DropDownItems.Add(automatic);
+        foreach(var entry in ClaudeDesktopReader.RecentSessions(25))
+        {
+            var project=entry.Project.Length>34?entry.Project[..31]+"...":entry.Project;
+            var display=entry.UpdatedUtc.ToLocalTime().ToString("MM-dd HH:mm")
+                +" | "+project+" | "+entry.SessionId[..8];
+            var path=entry.Path;
+            var item=new ToolStripMenuItem(display){
+                Checked=string.Equals(_selectedClaudeTranscript,path,StringComparison.OrdinalIgnoreCase)
+            };
+            item.Click+=(_,_)=>{
+                _selectedClaudeTranscript=path;
+                _snapshot=null;
+                _lastRead=DateTime.MinValue;
+            };
+            _claudeChooser.DropDownItems.Add(item);
+        }
+        if(_claudeChooser.DropDownItems.Count==1)
+            _claudeChooser.DropDownItems.Add(
+                new ToolStripMenuItem("No local JSONL sessions found"){Enabled=false});
     }
 
     private void SyncMenu()
@@ -223,13 +259,18 @@ internal sealed class OverlayController:ApplicationContext
         _lastRead=DateTime.UtcNow;
         var capturedSource=source.Value;
         var capturedTitle=_windowTitle;
+        var capturedOpenCode=_selectedOpenCodeSession;
+        var capturedClaude=_selectedClaudeTranscript;
         _=Task.Run(()=>{
             try
             {
                 return capturedSource==SourceKind.OpenCode
                     ?OpenCodeReader.Read(windowTitle:capturedTitle,
-                        selectedSessionId:_selectedOpenCodeSession)
-                    :TranscriptReader.Read(capturedSource,capturedTitle);
+                        selectedSessionId:capturedOpenCode)
+                    :capturedSource==SourceKind.Claude
+                        ?ClaudeDesktopReader.Read(windowTitle:capturedTitle,
+                            selectedTranscriptPath:capturedClaude)
+                        :TranscriptReader.Read(capturedSource,capturedTitle);
             }
             catch(Exception ex) when(ex is IOException or UnauthorizedAccessException
                 or InvalidOperationException or ArgumentException)
@@ -237,7 +278,9 @@ internal sealed class OverlayController:ApplicationContext
         }).ContinueWith(task=>{
             try
             {
-                if(task.IsCompletedSuccessfully && _active==capturedSource && !_form.IsDisposed)
+                if(task.IsCompletedSuccessfully && _active==capturedSource && !_form.IsDisposed
+                    &&capturedOpenCode==_selectedOpenCodeSession
+                    &&capturedClaude==_selectedClaudeTranscript)
                 {
                     _snapshot=task.Result;
                     _form.SetData(_snapshot,capturedSource);

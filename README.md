@@ -66,3 +66,21 @@ The overlay defaults to the bottom-right of the active app to avoid toolbar butt
 - **Close** is now a custom-painted high-contrast X with a distinct 35px clickable area; no chevron.
 - Expanding and collapsing keeps the floating panel inside the monitor working area, and a mouse drag is not interrupted by re-anchoring.
 - These sources rely on reverse-engineered Claude Desktop local file layouts; if a session lives only in remote/cloud storage, accurate token extraction remains unavailable without a supported API.
+
+
+## v1.4.0 — Claude Desktop recording workaround
+
+Claude Code session JSONL files under \`%USERPROFILE%\\.claude\\projects\` are now
+discoverable even when an MSIX Claude Desktop manifest is absent or moved.
+
+While Claude Desktop is open, right-click the TokenOverlay tray icon and choose
+**Claude session**. Pick the recently modified session matching your project and
+UUID prefix. Each entry shows its local modification time, encoded project folder
+and UUID prefix. An **Auto** option retains best-effort manifest mapping and
+falls back to the newest locally written transcript (only if updated within
+four hours). Auto fallback is explicitly marked as **not active-tab verified**.
+
+Use **Claude diagnostics** to view the local session inventory without displaying
+conversation contents. Manually selected sessions are read-only and never modify
+Claude files. This does not make cloud-only chats measurable or guarantee
+that the newest transcript is the visible Code tab.

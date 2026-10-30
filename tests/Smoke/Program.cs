@@ -85,6 +85,21 @@ try
         Check(claude?.LastDuration==TimeSpan.FromSeconds(56),"Claude turn duration");
     }
     finally{File.Delete(transcript);}
+    var partialTranscript=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".jsonl");
+    try
+    {
+        File.WriteAllLines(partialTranscript,new[]{
+            JsonSerializer.Serialize(new {type="assistant",message=new {id="stream1",
+                usage=new {input_tokens=20,output_tokens=40,cache_read_input_tokens=90,
+                    cache_creation_input_tokens=10}}}),
+            JsonSerializer.Serialize(new {type="assistant",message=new {id="stream1",
+                usage=new {input_tokens=20,output_tokens=8,cache_read_input_tokens=90,
+                    cache_creation_input_tokens=10}}})
+        });
+        var measured=TranscriptReader.ReadFile(SourceKind.Claude,partialTranscript);
+        Check(measured?.Total==160,"Claude duplicate message snapshots do not regress");
+    }
+    finally{File.Delete(partialTranscript);}
     var codexLog=Path.Combine(Path.GetTempPath(),"rollout-"+Guid.NewGuid()+".jsonl");
     try
     {
@@ -139,6 +154,22 @@ try
         var nested=ClaudeDesktopReader.Read("Tunnel Coffee landing page",
             new[]{manifestRoot},new[]{transcriptRoot});
         Check(nested?.Total==90,"nested CLI ID index resolves to JSONL");
+
+        // MSIX Desktop builds can omit or relocate the local_* index entirely.
+        File.Delete(Path.Combine(manifestRoot,"local_index.json"));
+        var fallback=ClaudeDesktopReader.Read(manifestRoots:new[]{manifestRoot},
+            transcriptRoots:new[]{transcriptRoot});
+        Check(fallback?.Total==90,"recent local Claude transcript fallback without manifest");
+        Check(fallback?.Note?.Contains("NOT verified")==true,
+            "fallback must not claim active tab certainty");
+        var sessions=ClaudeDesktopReader.RecentSessions(10,new[]{transcriptRoot});
+        Check(sessions.Count==1 && sessions[0].SessionId==transcriptId,
+            "Claude manual session picker lists actual JSONL file");
+        var selected=ClaudeDesktopReader.Read(manifestRoots:new[]{manifestRoot},
+            transcriptRoots:new[]{transcriptRoot},
+            selectedTranscriptPath:sessions[0].Path);
+        Check(selected?.Total==90 && selected.Note?.Contains("Manually selected")==true,
+            "pinned Claude transcript works without Desktop manifest");
     }
     finally
     {

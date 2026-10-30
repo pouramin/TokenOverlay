@@ -56,9 +56,9 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.0
+          tag_name: v0.4.0
           target_commitish: ${{ github.sha }}
-          name: TunnelLab TokenOverlay v0.3.0
+          name: TunnelLab TokenOverlay v0.4.0
           body: "Unofficial Windows overlay built from MIT-licensed upstream project by soleillevant0125. Local token usage only; no telemetry."
           files: |
             TokenOverlay-win-x64.zip

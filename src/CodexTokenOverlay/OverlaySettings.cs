@@ -301,13 +301,13 @@ internal sealed class OverlaySettings
 
             if (index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
             {
-                throw new ArgumentException("--settings 后必须提供绝对设置文件路径。", nameof(args));
+                throw new ArgumentException("--settings requires an absolute settings path.", nameof(args));
             }
 
             var candidate = args[index + 1];
             if (!Path.IsPathFullyQualified(candidate))
             {
-                throw new ArgumentException("--settings 只接受绝对设置文件路径。", nameof(args));
+                throw new ArgumentException("--settings accepts only absolute paths.", nameof(args));
             }
 
             return Path.GetFullPath(candidate);
@@ -409,7 +409,7 @@ internal static class SettingsProbe
                 "Select" => Select(probeCase),
                 "Load" => Load(probeCase),
                 "SaveReload" => SaveReload(probeCase),
-                _ => throw new ArgumentException($"不支持的设置探针操作：{probeCase.Operation}")
+                _ => throw new ArgumentException($"Unsupported settings probe operation: {probeCase.Operation}")
             };
             results.Add(new SettingsProbeCaseResult(probeCase.Name, result.Settings, result.MustPersist));
         }
@@ -423,7 +423,7 @@ internal static class SettingsProbe
         if (!Enum.TryParse<CollapsedSlot>(probeCase.Slot, ignoreCase: true, out var slot)
             || !probeCase.Field.HasValue)
         {
-            throw new ArgumentException("Select 设置探针需要有效的 Slot 和 Field。", nameof(probeCase));
+            throw new ArgumentException("Select settings probe requires valid Slot and Field.", nameof(probeCase));
         }
 
         result.Settings.SelectCollapsedField(slot, (DisplayField)probeCase.Field.Value);
@@ -464,7 +464,7 @@ internal static class SettingsProbe
     private static string RequireJson(SettingsProbeCase probeCase)
     {
         return probeCase.Json ?? throw new ArgumentException(
-            "设置探针操作需要 Json。",
+            "Settings probe requires JSON.",
             nameof(probeCase));
     }
 
@@ -474,7 +474,7 @@ internal static class SettingsProbe
             || !Path.IsPathFullyQualified(probeCase.SettingsPath))
         {
             throw new ArgumentException(
-                "设置探针需要绝对临时设置路径。",
+                "Settings probe requires an absolute temporary path.",
                 nameof(probeCase));
         }
 
@@ -483,7 +483,7 @@ internal static class SettingsProbe
         if (!path.StartsWith(temporaryRoot, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
-                "设置探针只能使用临时设置路径。",
+                "Settings probe supports only temporary paths.",
                 nameof(probeCase));
         }
 

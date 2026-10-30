@@ -268,7 +268,7 @@ internal static class InteractionProbe
                 "CapsuleMouseUp" => interaction.OnCapsuleMouseUp(),
                 "PointerSample" => interaction.OnPointerSample(
                     ReadButtons(probeEvent),
-                    probeEvent.PointerInsideOverlay ?? throw new ArgumentException("PointerSample 操作需要 PointerInsideOverlay。", nameof(probeEvent))),
+                    probeEvent.PointerInsideOverlay ?? throw new ArgumentException("PointerSample requires PointerInsideOverlay.", nameof(probeEvent))),
                 "CollapseForHostChange" => interaction.CollapseForHostChange(),
                 "CollapseForExpandedLayoutFailure" => interaction.CollapseForExpandedLayoutFailure(),
                 "HideForSpace" => interaction.HideForSpace(),
@@ -279,10 +279,10 @@ internal static class InteractionProbe
                     interaction),
                 "ObserveAnchorTarget" => anchorTarget.ObserveAndCollapse(
                     probeEvent.HostHandle
-                        ?? throw new ArgumentException("ObserveAnchorTarget 操作需要 HostHandle。", nameof(probeEvent)),
+                        ?? throw new ArgumentException("ObserveAnchorTarget requires HostHandle.", nameof(probeEvent)),
                     (AttachmentReferencePoint)(probeEvent.ReferencePoint ?? (int)AttachmentReferencePoint.TopLeft),
                     interaction),
-                _ => throw new ArgumentException($"不支持的交互探针操作：{probeEvent.Operation}", nameof(probeEvent))
+                _ => throw new ArgumentException($"Unsupported interaction probe operation: {probeEvent.Operation}", nameof(probeEvent))
             };
             return new InteractionProbeEventResult(
                 interaction.State,
@@ -300,7 +300,7 @@ internal static class InteractionProbe
             || !probeEvent.RouteVersion.HasValue)
         {
             throw new ArgumentException(
-                "ObserveActiveRouteThread 操作需要完整 route status。",
+                "ObserveActiveRouteThread requires a complete route status.",
                 nameof(probeEvent));
         }
 
@@ -316,14 +316,14 @@ internal static class InteractionProbe
     {
         if (!probeEvent.PressedButtons.HasValue)
         {
-            throw new ArgumentException("PointerSample 操作需要 PressedButtons。", nameof(probeEvent));
+            throw new ArgumentException("PointerSample requires PressedButtons.", nameof(probeEvent));
         }
 
         const PointerButtons supported = PointerButtons.Left | PointerButtons.Right | PointerButtons.Middle;
         var buttons = (PointerButtons)probeEvent.PressedButtons.Value;
         if ((buttons & ~supported) != PointerButtons.None)
         {
-            throw new ArgumentOutOfRangeException(nameof(probeEvent), "PointerSample 包含不支持的按键标志。");
+            throw new ArgumentOutOfRangeException(nameof(probeEvent), "PointerSample contains an unsupported mouse button flag.");
         }
 
         return buttons;

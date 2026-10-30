@@ -101,6 +101,25 @@ internal sealed class TokenStripForm : Form
     private Point _fixedTopLeft;
     private int _gestureStartScalePercent = ManualAttachmentRules.DefaultScalePercent;
     private OverlayEditPreviewEventArgs? _lastEditPreview;
+    private bool _closeHovered;
+
+    // Close button is drawn into the expanded panel's top-right header.
+    private Rectangle CloseButtonBounds
+    {
+        get
+        {
+            if (CurrentLayout is null || CurrentLayout.PanelBounds.IsEmpty || IsEditMode)
+                return Rectangle.Empty;
+            var metrics = OverlayRenderMetrics.Create(CurrentLayout.Dpi, CurrentLayout.ScalePercent);
+            var panel = CurrentLayout.PanelBounds.ToRectangle();
+            var buttonSize = Math.Max(18, (int)Math.Round(24d *
+                CurrentLayout.Dpi / 96d * CurrentLayout.ScalePercent / 100d));
+            return new Rectangle(
+                panel.Right - metrics.PanelPadding - buttonSize,
+                panel.Top + metrics.PanelPadding,
+                buttonSize, buttonSize);
+        }
+    }
 
     public TokenStripForm()
     {
@@ -131,6 +150,7 @@ internal sealed class TokenStripForm : Form
     }
 
     public event EventHandler? CapsuleClicked;
+    public event EventHandler? ExitRequested;
     public event EventHandler<OverlayEditPreviewEventArgs>? EditPreviewChanged;
     public event EventHandler<OverlayEditPreviewEventArgs>? EditGestureCompleted;
     public event EventHandler? EditSaveRequested;
@@ -175,7 +195,7 @@ internal sealed class TokenStripForm : Form
                 true,
                 true,
                 true,
-                "拖动调整位置",
+                "Drag to reposition",
                 new IntRect(
                     content.Left,
                     content.Top,
@@ -289,7 +309,7 @@ internal sealed class TokenStripForm : Form
         if (CurrentLayout?.State != OverlayVisualState.Collapsed
             || !CurrentLayout.PanelBounds.IsEmpty)
         {
-            throw new InvalidOperationException("编辑模式只能从收起布局开始。");
+            throw new InvalidOperationException("Edit mode requires the collapsed layout.");
         }
 
         _gestureStartScalePercent = ManualAttachmentRules.SanitizeScale(scalePercent);
@@ -400,7 +420,25 @@ internal sealed class TokenStripForm : Form
     protected override void OnMouseMove(MouseEventArgs eventArgs)
     {
         base.OnMouseMove(eventArgs);
+        var hovered = CloseButtonBounds.Contains(eventArgs.Location);
+        if (_closeHovered != hovered)
+        {
+            _closeHovered = hovered;
+            Cursor = hovered ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
         HandleMouseMove(eventArgs.Location, PointToScreen(eventArgs.Location));
+    }
+
+    protected override void OnMouseLeave(EventArgs eventArgs)
+    {
+        base.OnMouseLeave(eventArgs);
+        if (_closeHovered)
+        {
+            _closeHovered = false;
+            Cursor = Cursors.Default;
+            Invalidate();
+        }
     }
 
     protected override void OnMouseUp(MouseEventArgs eventArgs)
@@ -517,6 +555,12 @@ internal sealed class TokenStripForm : Form
                 _fixedTopLeft,
                 _gestureStartScalePercent);
             CompleteEditGesture(completed, releaseCapture: true);
+            return;
+        }
+
+        if (CloseButtonBounds.Contains(clientPoint))
+        {
+            ExitRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -769,11 +813,13 @@ internal sealed class TokenStripForm : Form
         var headerHeight = metrics.HeaderHeight;
         TextRenderer.DrawText(
             graphics,
-            "Token 详情",
+            "Token Details",
             headerFont,
-            new Rectangle(content.Left, content.Top, content.Width, headerHeight),
+            new Rectangle(content.Left, content.Top, Math.Max(0, content.Width - CloseButtonBounds.Width - 8), headerHeight),
             _palette.Value,
             TextFlags);
+
+        DrawCloseButton(graphics, metrics);
 
         var highlightTop = content.Top + headerHeight + metrics.HighlightTopGap;
         var highlightHeight = metrics.HighlightHeight;
@@ -830,6 +876,29 @@ internal sealed class TokenStripForm : Form
             graphics.DrawLine(dividerPen, rowBounds.Left, rowBounds.Top, rowBounds.Right, rowBounds.Top);
             DrawExpandedRow(graphics, row, rowBounds, labelFont, valueFont);
         }
+    }
+
+    private void DrawCloseButton(Graphics graphics, OverlayRenderMetrics metrics)
+    {
+        var bounds = CloseButtonBounds;
+        if (bounds.IsEmpty) return;
+
+        if (_closeHovered)
+        {
+            using var hoverBrush = new SolidBrush(Color.FromArgb(55, _palette.Value));
+            using var hoverPath = CreateRoundedRectanglePath(bounds, Math.Max(4, metrics.PanelRadius / 2));
+            graphics.FillPath(hoverBrush, hoverPath);
+        }
+
+        using var pen = new Pen(_closeHovered ? _palette.Value : _palette.Label,
+            Math.Max(1.5f, metrics.StrokeWidth * 1.4f));
+        pen.StartCap = LineCap.Round;
+        pen.EndCap = LineCap.Round;
+        var offset = Math.Max(5, bounds.Width / 3);
+        graphics.DrawLine(pen, bounds.Left + offset, bounds.Top + offset,
+            bounds.Right - offset, bounds.Bottom - offset);
+        graphics.DrawLine(pen, bounds.Right - offset, bounds.Top + offset,
+            bounds.Left + offset, bounds.Bottom - offset);
     }
 
     private void DrawCompactMetric(

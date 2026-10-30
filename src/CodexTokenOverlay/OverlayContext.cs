@@ -57,7 +57,7 @@ internal sealed class OverlayContext : ApplicationContext
         _monitor = new TokenLogMonitor(sessionRoot);
         _settings = OverlaySettings.Load(_settingsPath);
         _presentation = OverlayPresentationBuilder.CreateWaiting(
-            "正在寻找当前 Codex 会话…",
+            "Finding current Codex session...",
             _settings.CollapsedPrimaryField,
             _settings.CollapsedSecondaryField,
             _settings.VisibleFields);
@@ -68,41 +68,41 @@ internal sealed class OverlayContext : ApplicationContext
             ApplyTheme);
 
         var menu = new ContextMenuStrip();
-        _sessionMenuItem = new ToolStripMenuItem("会话：等待数据") { Enabled = false };
+        _sessionMenuItem = new ToolStripMenuItem("Session: waiting for data") { Enabled = false };
         menu.Items.Add(_sessionMenuItem);
-        _pinSessionMenuItem = new ToolStripMenuItem("锁定当前会话") { Enabled = false, CheckOnClick = true };
+        _pinSessionMenuItem = new ToolStripMenuItem("Pin current session") { Enabled = false, CheckOnClick = true };
         _pinSessionMenuItem.CheckedChanged += (_, _) =>
         {
             _monitor.PinActiveSession = _pinSessionMenuItem.Checked;
-            _pinSessionMenuItem.Text = _pinSessionMenuItem.Checked ? "已锁定当前会话" : "锁定当前会话";
+            _pinSessionMenuItem.Text = _pinSessionMenuItem.Checked ? "Unpin current session" : "Pin current session";
         };
         menu.Items.Add(_pinSessionMenuItem);
         menu.Items.Add(new ToolStripSeparator());
 
-        _adjustManualMenuItem = new ToolStripMenuItem("调整位置和大小…");
+        _adjustManualMenuItem = new ToolStripMenuItem("Adjust position and size...");
         _adjustManualMenuItem.Click += (_, _) => BeginManualEditing();
         menu.Items.Add(_adjustManualMenuItem);
-        _saveManualMenuItem = new ToolStripMenuItem("完成调整") { Visible = false };
+        _saveManualMenuItem = new ToolStripMenuItem("Save layout") { Visible = false };
         _saveManualMenuItem.Click += (_, _) => SaveManualEditing();
         menu.Items.Add(_saveManualMenuItem);
-        _cancelManualMenuItem = new ToolStripMenuItem("取消调整") { Visible = false };
+        _cancelManualMenuItem = new ToolStripMenuItem("Cancel layout") { Visible = false };
         _cancelManualMenuItem.Click += (_, _) => CancelManualEditing();
         menu.Items.Add(_cancelManualMenuItem);
-        _resetManualMenuItem = new ToolStripMenuItem("重置到 Codex 右上");
+        _resetManualMenuItem = new ToolStripMenuItem("Reset to Codex top right");
         _resetManualMenuItem.Click += (_, _) => ResetManualPlacement();
         menu.Items.Add(_resetManualMenuItem);
 
-        _traditionalMenuItem = new ToolStripMenuItem("传统定位");
-        AddAnchorMenu(_traditionalMenuItem, "标题栏右上", AnchorMode.TitleBarTopRight);
-        AddAnchorMenu(_traditionalMenuItem, "自动吸附", AnchorMode.Auto);
-        AddAnchorMenu(_traditionalMenuItem, "窗口内右上", AnchorMode.InsideTopRight);
-        AddAnchorMenu(_traditionalMenuItem, "窗口内右下", AnchorMode.InsideBottomRight);
+        _traditionalMenuItem = new ToolStripMenuItem("Preset positions");
+        AddAnchorMenu(_traditionalMenuItem, "Title bar, top right", AnchorMode.TitleBarTopRight);
+        AddAnchorMenu(_traditionalMenuItem, "Auto dock", AnchorMode.Auto);
+        AddAnchorMenu(_traditionalMenuItem, "Inside window, top right", AnchorMode.InsideTopRight);
+        AddAnchorMenu(_traditionalMenuItem, "Inside window, bottom right", AnchorMode.InsideBottomRight);
         menu.Items.Add(_traditionalMenuItem);
         menu.Items.Add(new ToolStripSeparator());
 
-        var collapsedFieldsMenu = new ToolStripMenuItem("收起时显示");
-        var primaryMenu = new ToolStripMenuItem("左侧指标");
-        var secondaryMenu = new ToolStripMenuItem("右侧指标");
+        var collapsedFieldsMenu = new ToolStripMenuItem("Collapsed metrics");
+        var primaryMenu = new ToolStripMenuItem("Left metric");
+        var secondaryMenu = new ToolStripMenuItem("Right metric");
         foreach (var field in DisplayFieldRules.Ordered)
         {
             var text = OverlayPresentationBuilder.GetFieldMenuText(field);
@@ -113,7 +113,7 @@ internal sealed class OverlayContext : ApplicationContext
         collapsedFieldsMenu.DropDownItems.Add(secondaryMenu);
         menu.Items.Add(collapsedFieldsMenu);
 
-        var fieldsMenu = new ToolStripMenuItem("显示字段");
+        var fieldsMenu = new ToolStripMenuItem("Shown metrics");
         foreach (var field in DisplayFieldRules.Ordered)
         {
             AddVisibleFieldMenu(fieldsMenu, OverlayPresentationBuilder.GetFieldMenuText(field), field);
@@ -121,7 +121,7 @@ internal sealed class OverlayContext : ApplicationContext
         menu.Items.Add(fieldsMenu);
         menu.Items.Add(new ToolStripSeparator());
 
-        _visibilityMenuItem = new ToolStripMenuItem("暂时隐藏");
+        _visibilityMenuItem = new ToolStripMenuItem("Hide overlay");
         _visibilityMenuItem.Click += (_, _) =>
         {
             if (_manualAttachment.IsEditing)
@@ -129,7 +129,7 @@ internal sealed class OverlayContext : ApplicationContext
                 CancelManualEditing();
             }
             _manuallyHidden = !_manuallyHidden;
-            _visibilityMenuItem.Text = _manuallyHidden ? "恢复显示" : "暂时隐藏";
+            _visibilityMenuItem.Text = _manuallyHidden ? "Show overlay" : "Hide overlay";
             if (_manuallyHidden)
             {
                 CollapseAndHide();
@@ -141,20 +141,21 @@ internal sealed class OverlayContext : ApplicationContext
         };
         menu.Items.Add(_visibilityMenuItem);
 
-        var exitItem = new ToolStripMenuItem("退出");
+        var exitItem = new ToolStripMenuItem("Exit TokenOverlay");
         exitItem.Click += (_, _) => ExitOverlay();
         menu.Items.Add(exitItem);
 
         _trayIcon = new NotifyIcon
         {
             Icon = SystemIcons.Information,
-            Text = "Codex Token 状态条",
+            Text = "TunnelLab TokenOverlay",
             Visible = true,
             ContextMenuStrip = menu
         };
 
         _form.SetPresentation(_presentation);
         _form.CapsuleClicked += HandleCapsuleClicked;
+        _form.ExitRequested += (_, _) => ExitOverlay();
         _form.EditPreviewChanged += HandleEditPreviewChanged;
         _form.EditGestureCompleted += HandleEditGestureCompleted;
         _form.EditSaveRequested += (_, _) => SaveManualEditing();
@@ -345,11 +346,11 @@ internal sealed class OverlayContext : ApplicationContext
             _lastSnapshot = null;
             _lastRenderedTurnSecond = -1;
             var shortPendingId = string.IsNullOrWhiteSpace(_pendingThreadId)
-                ? "等待识别"
+                ? "Waiting"
                 : OverlayPresentationBuilder.ShortThreadId(_pendingThreadId);
             _pinSessionMenuItem.Enabled = _activeHost == OverlayHostKind.Codex && !string.IsNullOrWhiteSpace(_pendingThreadId);
             _presentation = OverlayPresentationBuilder.CreateWaiting(
-                $"等待会话 {shortPendingId} 的 token 数据…",
+                $"Waiting for session {shortPendingId}  token data...",
                 _settings.CollapsedPrimaryField,
                 _settings.CollapsedSecondaryField,
                 _settings.VisibleFields);
@@ -492,7 +493,7 @@ internal sealed class OverlayContext : ApplicationContext
         _presentation = _lastSnapshot is null
             ? OverlayPresentationBuilder.CreateWaiting(
                 _activeHost == OverlayHostKind.Claude
-                    ? "Finding local Claude Code session…" : "正在寻找当前 Codex 会话…",
+                    ? "Finding local Claude Code session…" : "Finding current Codex session...",
                 _settings.CollapsedPrimaryField,
                 _settings.CollapsedSecondaryField,
                 _settings.VisibleFields)
@@ -692,7 +693,7 @@ internal sealed class OverlayContext : ApplicationContext
         }
         if (!_manualAttachment.CanSave)
         {
-            NotifySaveFailure("请先将状态条拖到 Codex 主窗口上。");
+            NotifySaveFailure("Drag the overlay onto the main application window before saving.");
             return;
         }
 
@@ -702,7 +703,7 @@ internal sealed class OverlayContext : ApplicationContext
         if (!_settings.TrySave(_settingsPath))
         {
             ApplySnapshotToSettings(original);
-            NotifySaveFailure("无法保存设置，请检查设置文件权限后重试。");
+            NotifySaveFailure("Could not save settings. Check file permissions and try again.");
             return;
         }
 
@@ -739,8 +740,8 @@ internal sealed class OverlayContext : ApplicationContext
         {
             _trayIcon.ShowBalloonTip(
                 3000,
-                "Codex Token 状态条",
-                "无法保存重置后的设置。",
+                "TunnelLab TokenOverlay",
+                "Could not save reset settings.",
                 ToolTipIcon.Warning);
         }
 
@@ -850,7 +851,7 @@ internal sealed class OverlayContext : ApplicationContext
         _saveFailureNotified = true;
         _trayIcon.ShowBalloonTip(
             3000,
-            "Codex Token 状态条",
+            "TunnelLab TokenOverlay",
             message,
             ToolTipIcon.Warning);
     }
@@ -858,7 +859,7 @@ internal sealed class OverlayContext : ApplicationContext
     private Point CurrentCapsuleCenter()
     {
         var layout = _form.CurrentLayout
-            ?? throw new InvalidOperationException("编辑布局尚未建立。");
+            ?? throw new InvalidOperationException("Layout edit state was not initialized.");
         return new Point(
             _form.Left + layout.CapsuleBounds.X + (layout.CapsuleBounds.Width / 2),
             _form.Top + layout.CapsuleBounds.Y + (layout.CapsuleBounds.Height / 2));
@@ -959,11 +960,11 @@ internal sealed class OverlayContext : ApplicationContext
     {
         var threadId = _lastSnapshot?.ThreadId ?? _pendingThreadId;
         var shortId = string.IsNullOrWhiteSpace(threadId)
-            ? "等待识别"
+            ? "Waiting"
             : OverlayPresentationBuilder.ShortThreadId(threadId);
         _sessionMenuItem.Text = _activeHost == OverlayHostKind.Claude
             ? $"Claude: {shortId} · most recent local"
-            : $"会话：{shortId}{RouteStatusSuffix(_pendingRouteStatus)}";
+            : $"Session: {shortId}{RouteStatusSuffix(_pendingRouteStatus)}";
     }
 
     private void ApplyTheme(OverlayThemePalette palette)
@@ -979,9 +980,9 @@ internal sealed class OverlayContext : ApplicationContext
     {
         if (status.ActiveWindowCount > 1)
         {
-            return $" · 多窗口 {status.ActiveWindowCount}";
+            return $" · Windows: {status.ActiveWindowCount}";
         }
-        return status.IsConnected ? " · 已同步" : " · 日志模式";
+        return status.IsConnected ? " · Synced" : " · Log mode";
     }
 
     private void ExitOverlay()

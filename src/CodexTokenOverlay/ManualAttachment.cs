@@ -202,14 +202,14 @@ internal sealed class ManualPlacementEditState
     public bool IsActive => _draft is not null;
 
     public ManualPlacementSnapshot Draft =>
-        _draft ?? throw new InvalidOperationException("手动定位编辑尚未开始。");
+        _draft ?? throw new InvalidOperationException("Manual positioning has not started.");
 
     public void Begin(ManualPlacementSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (IsActive)
         {
-            throw new InvalidOperationException("手动定位编辑已经开始。");
+            throw new InvalidOperationException("Manual positioning is already active.");
         }
 
         _original = snapshot;
@@ -246,7 +246,7 @@ internal sealed class ManualPlacementEditState
     {
         _ = Draft;
         var original = _original
-            ?? throw new InvalidOperationException("手动定位编辑尚未开始。");
+            ?? throw new InvalidOperationException("Manual positioning has not started.");
         End();
         return original;
     }
@@ -409,7 +409,7 @@ internal sealed class ManualAttachmentCoordinator
     {
         if (!CanSave)
         {
-            throw new InvalidOperationException("当前手势没有有效的 Codex 吸附目标。");
+            throw new InvalidOperationException("No valid application attachment target for this gesture.");
         }
 
         var committed = _editState.Commit() with { Enabled = true };

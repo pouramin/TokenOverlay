@@ -118,6 +118,27 @@ try
         Check(c?.SessionName=="Tunnel Coffee landing page","Claude Desktop manifest title mapping");
         Check(c?.Total==90,"Claude Desktop correct manifest transcript");
         Check(c?.Note?.Contains("Title matched")==true,"Claude title match disclosure");
+
+        // An active Windows MSIX session can leave an unrenamed .json.tmp index.
+        File.Delete(Path.Combine(manifestRoot,"local_test.json"));
+        var temporaryIndex=Path.Combine(manifestRoot,"local_"+transcriptId+".json.tmp");
+        File.WriteAllText(temporaryIndex,JsonSerializer.Serialize(new {
+            title="Tunnel Coffee landing page",lastActivityAt=DateTimeOffset.UtcNow.ToString("O")
+        }));
+        var tmp=ClaudeDesktopReader.Read("Tunnel Coffee landing page",
+            new[]{manifestRoot},new[]{transcriptRoot});
+        Check(tmp?.Total==90,"recover active temp index without cliSessionId when UUID matches transcript");
+
+        // Some versions store the CLI session ID under state.
+        File.Delete(temporaryIndex);
+        File.WriteAllText(Path.Combine(manifestRoot,"local_index.json"),
+            JsonSerializer.Serialize(new {
+                title="Tunnel Coffee landing page",state=new {cliSessionId=transcriptId},
+                lastActivityAt=DateTimeOffset.UtcNow.ToString("O")
+            }));
+        var nested=ClaudeDesktopReader.Read("Tunnel Coffee landing page",
+            new[]{manifestRoot},new[]{transcriptRoot});
+        Check(nested?.Total==90,"nested CLI ID index resolves to JSONL");
     }
     finally
     {

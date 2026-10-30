@@ -10,9 +10,8 @@ internal sealed class OverlayForm : Form
     private readonly Panel _header=new(){BackColor=Color.FromArgb(30,34,45)};
     private readonly Label _summary=new(){ForeColor=Color.White,BackColor=Color.Transparent,
         Font=new Font("Segoe UI Semibold",9.7f),AutoEllipsis=true};
-    private readonly Button _close=new(){Text="×",Font=new Font("Segoe UI",15f),
-        FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(30,34,45),
-        ForeColor=Color.FromArgb(212,217,227),TabStop=false,Cursor=Cursors.Hand};
+    private readonly Button _close=new CloseGlyphButton(){
+        BackColor=Color.FromArgb(30,34,45),TabStop=false,Cursor=Cursors.Hand};
     private readonly Label _caption=new(){ForeColor=Color.FromArgb(163,172,190),
         Font=new Font("Segoe UI",8.6f),AutoEllipsis=true,BackColor=Color.Transparent};
     private readonly Panel _rows=new(){BackColor=Color.FromArgb(30,34,45)};
@@ -29,6 +28,8 @@ internal sealed class OverlayForm : Form
     public event EventHandler? DragCompleted;
     public bool Expanded=>_expanded;
     public bool IsDragging=>_dragging;
+    public bool IsPointerDown {get;private set;}
+    public event EventHandler? ExpandedChanged;
 
     protected override bool ShowWithoutActivation=>true;
     protected override CreateParams CreateParams
@@ -57,9 +58,9 @@ internal sealed class OverlayForm : Form
 
         _header.SetBounds(0,0,302,CompactHeight);
         _header.Cursor=Cursors.SizeAll;
-        _summary.SetBounds(12,10,253,25);
+        _summary.SetBounds(12,10,247,25);
         _summary.Cursor=Cursors.SizeAll;
-        _close.SetBounds(270,6,27,30);
+        _close.SetBounds(263,5,35,34);
         _close.FlatAppearance.BorderSize=0;
         _close.FlatAppearance.MouseOverBackColor=Color.FromArgb(100,44,51);
         _close.Click+=(_,_)=>ExitClicked?.Invoke(this,EventArgs.Empty);
@@ -102,6 +103,7 @@ internal sealed class OverlayForm : Form
     private void HeaderDown(object? sender,MouseEventArgs e)
     {
         if(e.Button!=MouseButtons.Left)return;
+        IsPointerDown=true;
         _dragStart=Control.MousePosition;
         _formStart=Location;
         _dragging=false;
@@ -119,6 +121,7 @@ internal sealed class OverlayForm : Form
     private void HeaderUp(object? sender,MouseEventArgs e)
     {
         if(e.Button!=MouseButtons.Left)return;
+        IsPointerDown=false;
         if(_dragging)
         {
             _dragging=false;
@@ -172,7 +175,12 @@ internal sealed class OverlayForm : Form
 
     private static string Ellipsis(string value,int length)=>
         value.Length<=length?value:value[..(length-1)]+"…";
-    private void Toggle(){_expanded=!_expanded;RefreshLayout();}
+    private void Toggle()
+    {
+        _expanded=!_expanded;
+        RefreshLayout();
+        ExpandedChanged?.Invoke(this,EventArgs.Empty);
+    }
     private void RefreshLayout()
     {
         Height=_expanded?ExpandedHeight:CompactHeight;
@@ -190,4 +198,35 @@ internal sealed class OverlayForm : Form
         Region?.Dispose();
         Region=new Region(path);
     }
+}
+
+internal sealed class CloseGlyphButton:Button
+{
+    public CloseGlyphButton()
+    {
+        FlatStyle=FlatStyle.Flat;
+        FlatAppearance.BorderSize=0;
+        SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint
+                 |ControlStyles.OptimizedDoubleBuffer,true);
+    }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        using(var brush=new SolidBrush(ClientRectangle.Contains(PointToClient(MousePosition))
+                  ?Color.FromArgb(96,48,56):BackColor))
+            e.Graphics.FillRectangle(brush,ClientRectangle);
+        using var pen=new Pen(Color.FromArgb(245,246,250),2.1f)
+        {
+            StartCap=LineCap.Round,EndCap=LineCap.Round
+        };
+        var centerX=ClientRectangle.Width/2f;
+        var centerY=ClientRectangle.Height/2f;
+        const float radius=5.5f;
+        e.Graphics.DrawLine(pen,centerX-radius,centerY-radius,
+            centerX+radius,centerY+radius);
+        e.Graphics.DrawLine(pen,centerX+radius,centerY-radius,
+            centerX-radius,centerY+radius);
+    }
+    protected override void OnMouseEnter(EventArgs e){base.OnMouseEnter(e);Invalidate();}
+    protected override void OnMouseLeave(EventArgs e){base.OnMouseLeave(e);Invalidate();}
 }

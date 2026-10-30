@@ -50,9 +50,9 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.0
+          tag_name: v1.3.0
           target_commitish: ${{ github.sha }}
-          name: TunnelLab TokenOverlay v1.2.0
+          name: TunnelLab TokenOverlay v1.3.0
           body: "Independent WinForms rewrite. Supports Codex Desktop, Claude Code, and OpenCode. OpenCode displays main-session and cumulative totals including child agent sessions. Local-only, read-only."
           files: |
             TunnelLab-TokenOverlay-win-x64.zip

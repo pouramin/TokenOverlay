@@ -79,6 +79,7 @@ internal sealed class OverlayController:ApplicationContext
         LoadPreferences();
         _form.ExitClicked+=(_,_)=>Quit();
         _form.DragCompleted+=(_,_)=>SaveDraggedPosition();
+        _form.ExpandedChanged+=(_,_)=>PositionOverlay();
         var sources=new ToolStripMenuItem("Source");
         foreach(var name in new[]{"Auto","Codex","Claude","OpenCode"})
         {
@@ -109,6 +110,12 @@ internal sealed class OverlayController:ApplicationContext
         _menu.Items.Add(pos);
         _menu.Items.Add(new ToolStripMenuItem("Show / hide",null,(_,_)=>{
             _hidden=!_hidden;if(_hidden)_form.Hide();
+        }));
+        _menu.Items.Add(new ToolStripMenuItem("Claude diagnostics",null,(_,_)=>
+        {
+            var report=ClaudeDesktopReader.Diagnostics();
+            MessageBox.Show(report,"Claude local session diagnostics",
+                MessageBoxButtons.OK,MessageBoxIcon.Information);
         }));
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(new ToolStripMenuItem("Exit TokenOverlay",null,(_,_)=>Quit()));
@@ -166,6 +173,16 @@ internal sealed class OverlayController:ApplicationContext
         y=Math.Clamp(y,monitor.Top,Math.Max(monitor.Top,monitor.Bottom-_form.Height));
         return new Point(x,y);
     }
+    private void PositionOverlay()
+    {
+        if(_lastWindow.IsEmpty || _form.IsDragging || _form.IsPointerDown)return;
+        var p=DefaultPosition(_lastWindow);
+        var monitor=Screen.FromRectangle(_lastWindow).WorkingArea;
+        _form.Location=new Point(
+            Math.Clamp(p.X+_offsetX,monitor.Left,Math.Max(monitor.Left,monitor.Right-_form.Width)),
+            Math.Clamp(p.Y+_offsetY,monitor.Top,Math.Max(monitor.Top,monitor.Bottom-_form.Height)));
+    }
+
     private void SaveDraggedPosition()
     {
         if(_lastWindow.IsEmpty)return;
@@ -198,14 +215,7 @@ internal sealed class OverlayController:ApplicationContext
         {
             _active=source;_snapshot=null;_lastRead=DateTime.MinValue;
         }
-        if(!_form.IsDragging)
-        {
-            var p=DefaultPosition(host);
-            var display=Screen.FromHandle(hwnd).WorkingArea;
-            _form.Location=new Point(
-                Math.Clamp(p.X+_offsetX,display.Left,Math.Max(display.Left,display.Right-_form.Width)),
-                Math.Clamp(p.Y+_offsetY,display.Top,Math.Max(display.Top,display.Bottom-_form.Height)));
-        }
+        PositionOverlay();
         _form.SetData(_snapshot,source.Value);
         if(!_form.Visible)_form.Show();
         if(DateTime.UtcNow-_lastRead<TimeSpan.FromSeconds(2.5)

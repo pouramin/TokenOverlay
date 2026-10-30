@@ -57,3 +57,12 @@ The overlay defaults to the bottom-right of the active app to avoid toolbar butt
 - **OpenCode session picker:** Right-click the tray icon, select **OpenCode session**, then choose the exact session by title. The newest session is used automatically unless you explicitly choose one. This avoids confusing a freshly modified unrelated conversation with the visible one.
 - **Claude Desktop Code-tab:** reads local Desktop manifests (`cliSessionId`, `title`, `lastActivityAt`) from both normal roaming storage and Windows MSIX package storage, then associates the selected metadata with its actual local JSONL transcript. Ordinary CLI transcripts with no Desktop manifest are no longer displayed as though they belonged to the Desktop tab.
 - Claude Desktop lacks a supported public active-tab API. **Recent local** and **historical local** are labelled accordingly. Cloud chats are not tracked.
+
+## v1.3.0 — Claude Desktop recovery and reliable close button
+
+- Claude local session discovery covers standard and legacy session-index directories, including MSIX redirected storage and `local_*.json.tmp` entries that are sometimes left during Windows updates.
+- Resolves a missing top-level `cliSessionId` from nested state, or only when the local index UUID actually matches a JSONL transcript. No mismatched sessions are substituted.
+- **Claude diagnostics** from the Windows tray lists only file counts and local search paths. No messages or tokens are shared or uploaded.
+- **Close** is now a custom-painted high-contrast X with a distinct 35px clickable area; no chevron.
+- Expanding and collapsing keeps the floating panel inside the monitor working area, and a mouse drag is not interrupted by re-anchoring.
+- These sources rely on reverse-engineered Claude Desktop local file layouts; if a session lives only in remote/cloud storage, accurate token extraction remains unavailable without a supported API.

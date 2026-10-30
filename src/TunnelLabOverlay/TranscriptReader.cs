@@ -130,6 +130,18 @@ internal static class TranscriptReader
                             Math.Max(previous.Write,current.Write),
                             Math.Max(previous.Output,current.Output));
                     else usage[messageId]=current;
+
+                    // A completed assistant turn is not still running hours later.
+                    // Prefer a real end-of-turn marker to infer its elapsed time.
+                    var stopReason=Str(msg,"stop_reason");
+                    if(stopReason is "end_turn" or "stop_sequence")
+                    {
+                        var finished=ParseDate(j,"timestamp");
+                        if(running is { } started && finished is { } ended &&
+                           ended>=started && ended-started<TimeSpan.FromHours(24))
+                            lastDuration=ended-started;
+                        running=null;
+                    }
                 }
                 else if(kind=="user"&&j.TryGetProperty("message",out var userMessage)&&userMessage.ValueKind==JsonValueKind.Object
                          &&userMessage.TryGetProperty("content",out var content)&&
@@ -147,6 +159,16 @@ internal static class TranscriptReader
                 }
             }
             catch(JsonException) { }
+        }
+        // Older JSONL logs can omit turn_duration and end_turn. In that case
+        // do not mistake an hours-old prompt for an ongoing generation.
+        if(running is not null)
+        {
+            var sinceLastWrite=DateTime.UtcNow-File.GetLastWriteTimeUtc(path);
+            if(sinceLastWrite<TimeSpan.FromSeconds(-30) ||
+               sinceLastWrite>TimeSpan.FromMinutes(3) ||
+               DateTimeOffset.UtcNow-running.Value>TimeSpan.FromHours(12))
+                running=null;
         }
         if(usage.Count==0&&running==null&&lastDuration==null)return null;
         long input=0,read=0,write=0,output=0;

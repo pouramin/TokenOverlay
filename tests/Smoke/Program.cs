@@ -100,6 +100,47 @@ try
         Check(measured?.Total==160,"Claude duplicate message snapshots do not regress");
     }
     finally{File.Delete(partialTranscript);}
+
+    // A historical transcript with no end marker must not show hours of
+    // fake running time after the actual response finished.
+    var staleTranscript=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".jsonl");
+    try
+    {
+        var old=DateTimeOffset.UtcNow.AddHours(-2).ToString("O");
+        File.WriteAllLines(staleTranscript,new[]{
+            JsonSerializer.Serialize(new {type="user",timestamp=old,
+                message=new {content="Build a coffee page"}}),
+            JsonSerializer.Serialize(new {type="assistant",timestamp=old,
+                message=new {id="old",usage=new {input_tokens=2,
+                    output_tokens=3,cache_read_input_tokens=8,
+                    cache_creation_input_tokens=5}}})
+        });
+        File.SetLastWriteTimeUtc(staleTranscript,DateTime.UtcNow.AddHours(-2));
+        var stale=TranscriptReader.ReadFile(SourceKind.Claude,staleTranscript);
+        Check(stale?.Total==18,"stale Claude transcript retains usage");
+        Check(stale?.ActiveSince is null && stale?.TimeText=="—",
+            "stale Claude transcript must not show an ongoing turn");
+    }
+    finally{File.Delete(staleTranscript);}
+
+    // When the assistant explicitly completes a turn, derive its duration.
+    var completedTranscript=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".jsonl");
+    try
+    {
+        var now=DateTimeOffset.UtcNow;
+        File.WriteAllLines(completedTranscript,new[]{
+            JsonSerializer.Serialize(new {type="user",timestamp=now.AddMinutes(-8).ToString("O"),
+                message=new {content="Build a page"}}),
+            JsonSerializer.Serialize(new {type="assistant",timestamp=now.AddMinutes(-7).ToString("O"),
+                message=new {id="done",stop_reason="end_turn",usage=new {
+                    input_tokens=2,output_tokens=3,cache_read_input_tokens=8,
+                    cache_creation_input_tokens=5}}})
+        });
+        var done=TranscriptReader.ReadFile(SourceKind.Claude,completedTranscript);
+        Check(done?.ActiveSince is null && done?.LastDuration==TimeSpan.FromMinutes(1),
+            "Claude end_turn stops timer and infers last-turn duration");
+    }
+    finally{File.Delete(completedTranscript);}
     var codexLog=Path.Combine(Path.GetTempPath(),"rollout-"+Guid.NewGuid()+".jsonl");
     try
     {

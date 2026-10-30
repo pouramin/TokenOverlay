@@ -84,3 +84,13 @@ Use **Claude diagnostics** to view the local session inventory without displayin
 conversation contents. Manually selected sessions are read-only and never modify
 Claude files. This does not make cloud-only chats measurable or guarantee
 that the newest transcript is the visible Code tab.
+
+
+## v1.4.1 — Claude turn timer correction
+
+A stale Claude Code JSONL transcript no longer shows the elapsed time since a
+historical prompt as an active task. An explicit final assistant stop marker can
+provide the completed turn duration; otherwise missing completion data is
+displayed as unavailable. A prompt is considered active only while the local
+transcript has been updated recently. Usage counters remain cumulative and
+do not represent the context window percentage shown in Claude Desktop.

@@ -2,7 +2,7 @@ name: Build TunnelLab TokenOverlay (Windows)
 
 on:
   push:
-    branches: [main, fix/claude-sessions]
+    branches: [main, fix/claude-sessions, fix/claude-stale-timer]
   workflow_dispatch:
 
 permissions:
@@ -50,10 +50,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.0
+          tag_name: v1.4.1
           target_commitish: ${{ github.sha }}
-          name: TunnelLab TokenOverlay v1.4.0
-          body: "Claude Desktop local transcript discovery, manual Claude session selection, more informative diagnostics, and resilient usage message deduplication. Local-only, read-only."
+          name: TunnelLab TokenOverlay v1.4.1
+          body: "Fix misleading Claude Desktop multi-hour running timers: recognize final assistant stop markers and suppress stale JSONL activity. Retains v1.4.0 manual session selection. Local-only, read-only."
           files: |
             TunnelLab-TokenOverlay-win-x64.zip
             TunnelLab-TokenOverlay-win-x64.zip.sha256

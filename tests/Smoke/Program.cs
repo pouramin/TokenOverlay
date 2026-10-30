@@ -17,7 +17,8 @@ static void Message(SqliteConnection db,string table,string sid,string role,obje
     cmd.Parameters.AddWithValue("$data",JsonSerializer.Serialize(value));
     cmd.ExecuteNonQuery();
 }
-var v1=Temp(),v2=Temp();
+var v1=Temp();
+var v2=Temp();
 try
 {
     using(var db=new SqliteConnection("Data Source="+v1))

@@ -28,6 +28,7 @@ internal sealed class OverlayForm : Form
     public event EventHandler? ExitClicked;
     public event EventHandler? DragCompleted;
     public bool Expanded=>_expanded;
+    public bool IsDragging=>_dragging;
 
     protected override bool ShowWithoutActivation=>true;
     protected override CreateParams CreateParams

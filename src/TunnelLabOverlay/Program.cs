@@ -167,7 +167,7 @@ internal sealed class OverlayController:ApplicationContext
         {
             _active=source;_snapshot=null;_lastRead=DateTime.MinValue;
         }
-        if(!_form.Capture)
+        if(!_form.IsDragging)
         {
             var p=DefaultPosition(host);
             var display=Screen.FromHandle(hwnd).WorkingArea;

@@ -47,3 +47,7 @@ dotnet publish src/TunnelLabOverlay/TokenOverlay.csproj -c Release -r win-x64 --
 ```
 
 The source does not copy the old overlay implementation. Older release tags and their respective source history remain accessible independently.
+
+## 1.1.0 UI and compatibility update
+
+The overlay defaults to the bottom-right of the active app to avoid toolbar buttons. Drag the header to position it anywhere; the offset is saved locally. The floating bar is 302px wide and the × button exits immediately. OpenCode supports both legacy and new SQLite session/message tables, and checks additional Windows data directories. When no reliable usage record exists, the program displays **No data**, never a misleading 0. Stale timestamps do not produce multi-day timers. In Claude Desktop the latest local Claude Code JSONL is not necessarily the current cloud chat, so local numbers may not match the visible tab.

@@ -10,5 +10,6 @@
     <Authors>TunnelLab</Authors>
     <Description>Local-only token usage overlay for Codex, Claude Code and OpenCode desktop.</Description>
 </PropertyGroup>
-<ItemGroup><PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" /></ItemGroup>
+<ItemGroup><PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" /></ItemGroup>
 </Project>

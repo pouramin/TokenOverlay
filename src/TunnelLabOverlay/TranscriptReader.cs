@@ -117,13 +117,13 @@ internal static class TranscriptReader
                 if(kind=="assistant"&&j.TryGetProperty("message",out var msg)&&msg.ValueKind==JsonValueKind.Object
                     &&msg.TryGetProperty("usage",out var used)&&used.ValueKind==JsonValueKind.Object)
                 {
-                    var id=Str(msg,"id")??Str(j,"uuid");
-                    if(id is null)continue;
-                    usage[id]=(Num(used,"input_tokens"),Num(used,"cache_read_input_tokens"),
+                    var messageId=Str(msg,"id")??Str(j,"uuid");
+                    if(messageId is null)continue;
+                    usage[messageId]=(Num(used,"input_tokens"),Num(used,"cache_read_input_tokens"),
                         Num(used,"cache_creation_input_tokens"),Num(used,"output_tokens"));
                 }
-                else if(kind=="user"&&j.TryGetProperty("message",out var msg)&&msg.ValueKind==JsonValueKind.Object
-                         &&msg.TryGetProperty("content",out var content)&&
+                else if(kind=="user"&&j.TryGetProperty("message",out var userMessage)&&userMessage.ValueKind==JsonValueKind.Object
+                         &&userMessage.TryGetProperty("content",out var content)&&
                          (content.ValueKind==JsonValueKind.String
                           ||content.ValueKind==JsonValueKind.Array&&!content.EnumerateArray().Any(x=>Str(x,"type")=="tool_result")))
                 {

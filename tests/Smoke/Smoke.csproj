@@ -3,6 +3,7 @@
 <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
 <ItemGroup>
 <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+<PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
 <Compile Include="../../src/TunnelLabOverlay/Models.cs" Link="Models.cs" />
 <Compile Include="../../src/TunnelLabOverlay/OpenCodeReader.cs" Link="OpenCodeReader.cs" />
 <Compile Include="../../src/TunnelLabOverlay/TranscriptReader.cs" Link="TranscriptReader.cs" />

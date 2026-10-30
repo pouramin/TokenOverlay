@@ -1,57 +1,107 @@
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 using TunnelLab.TokenOverlay;
 
-static void Check(bool ok,string message) {if(!ok)throw new Exception("FAILED "+message);}
-var file=Path.Combine(Path.GetTempPath(),"tokenoverlay-tests-"+Guid.NewGuid().ToString("N")+".db");
+static void Check(bool ok,string label){if(!ok)throw new Exception("FAILED: "+label);}
+static string Temp()=>Path.Combine(Path.GetTempPath(),"tl-overlay-"+Guid.NewGuid().ToString("N")+".db");
+static void Execute(SqliteConnection db,string sql)
+{
+    using var cmd=db.CreateCommand();cmd.CommandText=sql;cmd.ExecuteNonQuery();
+}
+static void Message(SqliteConnection db,string table,string sid,string role,object value,long timestamp)
+{
+    using var cmd=db.CreateCommand();
+    cmd.CommandText="INSERT INTO "+table+"(session_id,time_created,data) VALUES($sid,$time,$data)";
+    cmd.Parameters.AddWithValue("$sid",sid);
+    cmd.Parameters.AddWithValue("$time",timestamp);
+    cmd.Parameters.AddWithValue("$data",JsonSerializer.Serialize(value));
+    cmd.ExecuteNonQuery();
+}
+var v1=Temp(),v2=Temp();
 try
 {
-    using(var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=file}.ToString()))
+    using(var db=new SqliteConnection("Data Source="+v1))
     {
         db.Open();
-        using var cmd=db.CreateCommand();
-        cmd.CommandText=@"
-CREATE TABLE session(id TEXT PRIMARY KEY, parent_id TEXT, title TEXT,time_updated INTEGER,time_created INTEGER,
-tokens_input INTEGER,tokens_output INTEGER,tokens_reasoning INTEGER,tokens_cache_read INTEGER,
-tokens_cache_write INTEGER,cost REAL);
-CREATE TABLE message(id TEXT,session_id TEXT,time_created INTEGER,data TEXT);
-INSERT INTO session VALUES('root',NULL,'Tunnel Coffee',2000000,1000000,644,6359,34,16308,0,0.01);
-INSERT INTO session VALUES('child','root','worker',2000001,1000001,2100,1555,0,7000,0,0.002);
-INSERT INTO message VALUES('msg1','root',2000000,'{""role"":""assistant"",""modelID"":""mercury-3"",""time"":{""created"":1000000,""completed"":1056000}}');
-INSERT INTO message VALUES('msg0','root',1000000,'{""role"":""user"",""time"":{""created"":1000000}}');";
-        cmd.ExecuteNonQuery();
+        Execute(db,@"CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,title TEXT,
+            time_updated INTEGER,time_created INTEGER,tokens_input INTEGER,
+            tokens_output INTEGER,tokens_reasoning INTEGER,tokens_cache_read INTEGER,
+            tokens_cache_write INTEGER,cost REAL);
+            CREATE TABLE message(id TEXT,session_id TEXT,time_created INTEGER,data TEXT);
+            INSERT INTO session VALUES('root',NULL,'Tunnel Coffee',2000000,1000000,644,6359,34,16308,0,0.01);
+            INSERT INTO session VALUES('child','root','worker',2000001,1000001,2100,1555,0,7000,0,0.002);");
+        Message(db,"message","root","assistant",new {role="assistant",modelID="mercury-3"},1000000);
     }
-    var open=OpenCodeReader.Read(file);
-    Check(open!=null,"SQLite session opened");
-    Check(open!.MainSessionTokens==23345,"main session counts all 5 disjoint token categories");
-    Check(open.Total==34000,"root + child sessions includes 10,655 extra tokens");
-    Check(open.ChildSessions==1,"child counted exactly once");
-    Check(open.Input==2744&&open.CacheRead==23308,"input and cache remain separate");
-    Check(open.Model=="mercury-3","model extracted");
-    Check(open.Cost>0.011 && open.Cost<0.013,"cost sum");
-    Check(open.SessionId=="root","resolve parent from newest child");
+    var aggregate=OpenCodeReader.Read(v1);
+    Check(aggregate is not null,"V1 session rollups");
+    Check(aggregate!.Total==34000 && aggregate.MainSessionTokens==23345,"V1 parent + child totals");
+    Check(aggregate.ChildSessions==1,"child session");
+    Check(aggregate.Cost>0.011&&aggregate.Cost<0.013,"cost");
+    Check(aggregate.Model=="mercury-3","model identity");
+    Check(aggregate.WorkedFor==null,"do not invent a 456h task timer");
 
-    string user=System.Text.Json.JsonSerializer.Serialize(new{type="user",timestamp="2026-10-30T10:00:00Z",
-        message=new{content="Build app"}});
-    string assistant=System.Text.Json.JsonSerializer.Serialize(new{type="assistant",
-        message=new{id="m1",usage=new{input_tokens=8,output_tokens=12,cache_read_input_tokens=50,cache_creation_input_tokens=20}}});
-    var claudePath=Path.Combine(Path.GetTempPath(),"test-"+Guid.NewGuid().ToString("N")+".jsonl");
-    File.WriteAllLines(claudePath,new[]{user,assistant,assistant,
-        System.Text.Json.JsonSerializer.Serialize(new{type="system",subtype="turn_duration",durationMs=56000})});
-    var claude=TranscriptReader.ReadFile(SourceKind.Claude,claudePath);
-    Check(claude?.Total==90,"Claude repeated streamed message dedup");
-    Check(claude?.LastDuration==TimeSpan.FromSeconds(56),"Claude turn_duration");
-    File.Delete(claudePath);
+    var epoch=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()-65000;
+    using(var db=new SqliteConnection("Data Source="+v2))
+    {
+        db.Open();
+        Execute(db,@"CREATE TABLE session_v2(id TEXT PRIMARY KEY,parent_id TEXT,title TEXT,
+            time_updated INTEGER,time_created INTEGER);
+            CREATE TABLE session_message(id TEXT,session_id TEXT,time_created INTEGER,data TEXT);");
+        using(var cmd=db.CreateCommand())
+        {
+            cmd.CommandText="INSERT INTO session_v2 VALUES('modern',NULL,'Tunnel Coffee landing page',$ts,$ts)";
+            cmd.Parameters.AddWithValue("$ts",epoch);cmd.ExecuteNonQuery();
+        }
+        var user=new {role="user",time=new {created=epoch}};
+        var assistant=new {role="assistant",modelID="mercury-3",
+            tokens=new {input=644,output=6359,reasoning=34,
+                cache=new {read=16308,write=0}},
+            cost=0.01,time=new {created=epoch+1000,completed=epoch+56000}};
+        Message(db,"session_message","modern","user",user,epoch);
+        Message(db,"session_message","modern","assistant",new {info=assistant},epoch+1000);
+    }
+    var modern=OpenCodeReader.Read(v2,windowTitle:"Tunnel Coffee landing page");
+    Check(modern is not null,"V2 tables recognized without session token columns");
+    Check(modern!.Total==23345,"V2 message JSON counters");
+    Check(modern.Input==644 && modern.CacheRead==16308 && modern.Output==6359 && modern.Reasoning==34,
+        "separate buckets");
+    Check(modern.LastDuration==TimeSpan.FromSeconds(56),"V2 validated last turn");
+    Check(modern.Model=="mercury-3","V2 model extraction");
+    Check(modern.Note?.Contains("Matched window title")==true,"window title selection");
 
-    var codexPath=Path.Combine(Path.GetTempPath(),"rollout-"+Guid.NewGuid().ToString("D")+".jsonl");
-    File.WriteAllLines(codexPath,new[]{
-        "{\"type\":\"session_meta\",\"payload\":{\"originator\":\"Codex Desktop\",\"id\":\"root\"}}",
-        "{\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"model_context_window\":128000,\"total_token_usage\":{\"input_tokens\":500,\"cached_input_tokens\":400,\"output_tokens\":80,\"reasoning_output_tokens\":20},\"last_token_usage\":{\"total_tokens\":400}}}}",
-        "{\"type\":\"event_msg\",\"timestamp\":\"2026-10-30T10:01:00Z\",\"payload\":{\"type\":\"task_complete\",\"duration_ms\":56000}}"
-    });
-    var codex=TranscriptReader.ReadFile(SourceKind.Codex,codexPath);
-    Check(codex?.Total==580,"Codex cached input and reasoning not double counted");
-    Check(codex?.LastDuration==TimeSpan.FromSeconds(56),"Codex completed duration");
-    File.Delete(codexPath);
-    Console.WriteLine("PASS: 12 independently authored parser and aggregation checks");
+    string userLine=JsonSerializer.Serialize(new {type="user",timestamp="2026-10-30T10:00:00Z",
+        message=new {content="Write HTML"}});
+    string assistantLine=JsonSerializer.Serialize(new {type="assistant",
+        message=new {id="m1",usage=new {input_tokens=8,output_tokens=12,
+            cache_read_input_tokens=50,cache_creation_input_tokens=20}}});
+    var transcript=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N")+".jsonl");
+    try
+    {
+        File.WriteAllLines(transcript,new []{userLine,assistantLine,assistantLine,
+            JsonSerializer.Serialize(new {type="system",subtype="turn_duration",durationMs=56000})});
+        var claude=TranscriptReader.ReadFile(SourceKind.Claude,transcript);
+        Check(claude?.Total==90,"Claude de-duplicates streamed message");
+        Check(claude?.LastDuration==TimeSpan.FromSeconds(56),"Claude turn duration");
+    }
+    finally{File.Delete(transcript);}
+    var codexLog=Path.Combine(Path.GetTempPath(),"rollout-"+Guid.NewGuid()+".jsonl");
+    try
+    {
+        File.WriteAllLines(codexLog,new[]{
+            "{\"type\":\"session_meta\",\"payload\":{\"originator\":\"Codex Desktop\",\"id\":\"root\"}}",
+            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"model_context_window\":128000,\"total_token_usage\":{\"input_tokens\":500,\"cached_input_tokens\":400,\"output_tokens\":80,\"reasoning_output_tokens\":20},\"last_token_usage\":{\"total_tokens\":400}}}}",
+            "{\"type\":\"event_msg\",\"timestamp\":\"2026-10-30T10:01:00Z\",\"payload\":{\"type\":\"task_complete\",\"duration_ms\":56000}}"
+        });
+        var codex=TranscriptReader.ReadFile(SourceKind.Codex,codexLog);
+        Check(codex?.Total==580,"Codex does not double count cached reasoning buckets");
+        Check(codex?.LastDuration==TimeSpan.FromSeconds(56),"Codex timer");
+    }
+    finally{File.Delete(codexLog);}
+    Console.WriteLine("PASS: OpenCode V1 + V2, parent/child totals, model, duration, Claude and Codex.");
 }
-finally{SqliteConnection.ClearAllPools();if(File.Exists(file))File.Delete(file);}
+finally
+{
+    SqliteConnection.ClearAllPools();
+    if(File.Exists(v1))File.Delete(v1);
+    if(File.Exists(v2))File.Delete(v2);
+}

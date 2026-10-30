@@ -25,9 +25,19 @@ internal sealed record UsageSnapshot(
 {
     // Categories are disjoint. Never count cached input or reasoning output twice.
     public long Total => Input + CacheRead + CacheWrite + Output + Reasoning;
-    public TimeSpan? WorkedFor => ActiveSince is { } start
-        ? (DateTimeOffset.UtcNow > start ? DateTimeOffset.UtcNow - start : TimeSpan.Zero)
-        : LastDuration;
+    public TimeSpan? WorkedFor
+    {
+        get
+        {
+            if (ActiveSince is { } start)
+            {
+                var elapsed = DateTimeOffset.UtcNow - start;
+                return elapsed >= TimeSpan.Zero && elapsed < TimeSpan.FromHours(24) ? elapsed : null;
+            }
+            return LastDuration is { } duration && duration >= TimeSpan.Zero
+                && duration < TimeSpan.FromHours(24) ? duration : null;
+        }
+    }
     public string TimeText => WorkedFor is { } duration ? FormatTime(duration) : "—";
     public static string FormatCount(long value)
     {
@@ -56,14 +66,39 @@ internal static class LocalPaths
         }
     }
     public static string ClaudeRoot => Path.Combine(UserHome, ".claude", "projects");
-    public static string OpenCodeDatabase
+    public static string[] OpenCodeDatabases
     {
         get
         {
-            var overrideDb = Environment.GetEnvironmentVariable("OPENCODE_DB");
-            if (!string.IsNullOrWhiteSpace(overrideDb)) return Path.GetFullPath(overrideDb);
+            var candidates = new List<string>();
+            var @override = Environment.GetEnvironmentVariable("OPENCODE_DB");
+            if (!string.IsNullOrWhiteSpace(@override))
+                candidates.Add(Path.GetFullPath(@override));
+            var dataDir = Environment.GetEnvironmentVariable("OPENCODE_DATA_DIR");
+            if (!string.IsNullOrWhiteSpace(dataDir))
+                candidates.Add(Path.Combine(dataDir, "opencode.db"));
             var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-            return Path.Combine(string.IsNullOrWhiteSpace(xdg) ? Path.Combine(UserHome, ".local", "share") : xdg, "opencode", "opencode.db");
+            if (!string.IsNullOrWhiteSpace(xdg))
+                candidates.Add(Path.Combine(xdg, "opencode", "opencode.db"));
+            candidates.Add(Path.Combine(UserHome, ".local", "share", "opencode", "opencode.db"));
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "opencode", "opencode.db"));
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "opencode", "opencode.db"));
+            // A user may run the preview/beta channel with a separate database.
+            var folders = candidates.Select(Path.GetDirectoryName).Where(x => !string.IsNullOrEmpty(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            foreach (var folder in folders)
+            {
+                if (!Directory.Exists(folder)) continue;
+                try
+                {
+                    candidates.AddRange(Directory.EnumerateFiles(folder, "opencode-*.db",
+                        SearchOption.TopDirectoryOnly));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+            return candidates.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
     }
 }

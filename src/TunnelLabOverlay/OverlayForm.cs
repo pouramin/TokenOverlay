@@ -2,34 +2,40 @@ using System.Drawing.Drawing2D;
 
 namespace TunnelLab.TokenOverlay;
 
-/// <summary>Fresh WinForms overlay; separate from all three editor processes.</summary>
+/// <summary>Small independent overlay. Drag its header to float above any supported app.</summary>
 internal sealed class OverlayForm : Form
 {
-    private readonly Panel _header = new() { BackColor = Color.FromArgb(30, 34, 45), Cursor = Cursors.Hand };
-    private readonly Label _summary = new() { ForeColor = Color.White, BackColor = Color.Transparent,
-        Font = new Font("Segoe UI Semibold", 11f, FontStyle.Regular), AutoEllipsis = true, Cursor=Cursors.Hand };
-    private readonly Button _close = new() { Text = "×", Font = new Font("Segoe UI", 16f, FontStyle.Regular),
-        FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(30,34,45),
-        ForeColor = Color.FromArgb(200,205,222), TabStop=false, Cursor=Cursors.Hand };
-    private readonly Label _caption = new() { ForeColor=Color.FromArgb(157,168,192),
-        Font=new Font("Segoe UI",9f), BackColor=Color.Transparent };
-    private readonly Panel _rows = new() { BackColor = Color.FromArgb(30, 34, 45) };
-    private readonly Label _footer = new() { BackColor=Color.Transparent, ForeColor=Color.FromArgb(161,166,188),
-        Font=new Font("Segoe UI",8f), AutoEllipsis=true };
-    private readonly List<(Label Key,Label Value)> _fields = new();
-    private readonly ToolTip _tip = new();
-    private UsageSnapshot? _snapshot;
+    private const int CompactHeight=44;
+    private const int ExpandedHeight=450;
+    private readonly Panel _header=new(){BackColor=Color.FromArgb(30,34,45)};
+    private readonly Label _summary=new(){ForeColor=Color.White,BackColor=Color.Transparent,
+        Font=new Font("Segoe UI Semibold",9.7f),AutoEllipsis=true};
+    private readonly Button _close=new(){Text="×",Font=new Font("Segoe UI",15f),
+        FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(30,34,45),
+        ForeColor=Color.FromArgb(212,217,227),TabStop=false,Cursor=Cursors.Hand};
+    private readonly Label _caption=new(){ForeColor=Color.FromArgb(163,172,190),
+        Font=new Font("Segoe UI",8.6f),AutoEllipsis=true,BackColor=Color.Transparent};
+    private readonly Panel _rows=new(){BackColor=Color.FromArgb(30,34,45)};
+    private readonly Label _footer=new(){BackColor=Color.Transparent,
+        ForeColor=Color.FromArgb(164,173,192),Font=new Font("Segoe UI",8f),
+        AutoEllipsis=true};
+    private readonly List<(Label Key,Label Value)> _fields=new();
+    private readonly ToolTip _tip=new();
     private bool _expanded;
+    private bool _dragging;
+    private Point _dragStart;
+    private Point _formStart;
     public event EventHandler? ExitClicked;
-    public bool Expanded => _expanded;
+    public event EventHandler? DragCompleted;
+    public bool Expanded=>_expanded;
 
-    protected override bool ShowWithoutActivation => true;
+    protected override bool ShowWithoutActivation=>true;
     protected override CreateParams CreateParams
     {
         get
         {
             var p=base.CreateParams;
-            p.ExStyle |= 0x08000000 | 0x00000080; // no-activate, tool-window
+            p.ExStyle|=0x08000000|0x00000080;
             return p;
         }
     }
@@ -44,88 +50,143 @@ internal sealed class OverlayForm : Form
         DoubleBuffered=true;
         BackColor=Color.FromArgb(30,34,45);
         ForeColor=Color.White;
-        Opacity=0.98;
-        Width=378;Height=48;
-        _header.Left=0;_header.Top=0;_header.Width=Width;_header.Height=48;
-        _header.Click+=(_,_)=>Toggle();
-        _summary.Left=13;_summary.Top=12;_summary.Width=322;_summary.Height=27;
-        _summary.Click+=(_,_)=>Toggle();
-        _close.Left=Width-38;_close.Top=8;_close.Width=27;_close.Height=31;
+        Opacity=0.97;
+        Width=302;
+        Height=CompactHeight;
+
+        _header.SetBounds(0,0,302,CompactHeight);
+        _header.Cursor=Cursors.SizeAll;
+        _summary.SetBounds(12,10,253,25);
+        _summary.Cursor=Cursors.SizeAll;
+        _close.SetBounds(270,6,27,30);
         _close.FlatAppearance.BorderSize=0;
-        _close.FlatAppearance.MouseOverBackColor=Color.FromArgb(92,41,49);
+        _close.FlatAppearance.MouseOverBackColor=Color.FromArgb(100,44,51);
         _close.Click+=(_,_)=>ExitClicked?.Invoke(this,EventArgs.Empty);
-        _caption.Left=15;_caption.Top=54;_caption.Width=320;_caption.Height=24;
-        _rows.Left=15;_rows.Top=88;_rows.Width=Width-30;_rows.Height=340;
-        _footer.Left=15;_footer.Top=425;_footer.Width=Width-30;_footer.Height=40;
+
+        _caption.SetBounds(13,53,275,24);
+        _rows.SetBounds(13,85,276,316);
+        _footer.SetBounds(13,404,276,39);
+
         Controls.Add(_header);
         _header.Controls.Add(_summary);
         _header.Controls.Add(_close);
         Controls.Add(_caption);
         Controls.Add(_rows);
         Controls.Add(_footer);
+
         for(var i=0;i<11;i++)
         {
-            var k=new Label { ForeColor=Color.FromArgb(147,157,181),
-                Font=new Font("Segoe UI",9.5f),Left=0,Top=i*28,Width=154,Height=24,AutoEllipsis=true};
-            var v=new Label { ForeColor=Color.White,Font=new Font("Segoe UI Semibold",9.5f),
-                TextAlign=ContentAlignment.MiddleRight,Left=157,Top=i*28,Width=190,Height=24,AutoEllipsis=true};
-            _fields.Add((k,v));_rows.Controls.Add(k);_rows.Controls.Add(v);
+            var key=new Label{ForeColor=Color.FromArgb(151,161,181),
+                Font=new Font("Segoe UI",8.7f),Left=0,Top=i*28,
+                Width=126,Height=24,AutoEllipsis=true};
+            var value=new Label{ForeColor=Color.White,
+                Font=new Font("Segoe UI Semibold",9.1f),
+                TextAlign=ContentAlignment.MiddleRight,Left=131,Top=i*28,
+                Width=143,Height=24,AutoEllipsis=true};
+            _fields.Add((key,value));
+            _rows.Controls.Add(key);_rows.Controls.Add(value);
         }
-        _tip.SetToolTip(_close, "Exit TokenOverlay");
-        _tip.SetToolTip(_summary,"Click to expand / collapse");
-        UpdateLayout();
-    }
-    private static string Count(long count)=>UsageSnapshot.FormatCount(count);
-    public void SetData(UsageSnapshot? snapshot,SourceKind source)
-    {
-        _snapshot=snapshot;
-        var sourceName=source.ToString();
-        _summary.Text=snapshot is null
-            ? $"{sourceName}  |  No local session data  ▾"
-            : $"{sourceName}  {Count(snapshot.Total)} tokens  ·  {snapshot.TimeText}  ▾";
-        _caption.Text=snapshot is null ? $"{sourceName} — waiting for local data" :
-            $"{sourceName}  /  {Truncate(snapshot.SessionName,39)}";
-        if(snapshot is not null)
+        foreach(Control control in new Control[]{_header,_summary})
         {
-            var rows=new (string,string)[] {
-                ("Total consumed",Count(snapshot.Total)),
-                ("Main session",snapshot.MainSessionTokens>0?Count(snapshot.MainSessionTokens):Count(snapshot.Total)),
-                ("Child sessions",snapshot.ChildSessions.ToString()),
-                ("Input (uncached)",Count(snapshot.Input)),
-                ("Cache read",Count(snapshot.CacheRead)),
-                ("Cache write",Count(snapshot.CacheWrite)),
-                ("Output",Count(snapshot.Output)),
-                ("Reasoning",Count(snapshot.Reasoning)),
-                ("Context used",snapshot.ContextLimit>0?$"{Count(snapshot.ContextUsed)} / {Count(snapshot.ContextLimit)}":"Not reported"),
-                ("Worked for",snapshot.TimeText),
-                ("Recorded cost",snapshot.Cost is { } cost?"$"+cost.ToString("0.0000",System.Globalization.CultureInfo.InvariantCulture):"N/A")
-            };
-            for(var i=0;i<rows.Length;i++)SetRow(i,rows[i].Item1,rows[i].Item2);
-            _footer.Text = snapshot.Note ?? "";
+            control.MouseDown+=HeaderDown;
+            control.MouseMove+=HeaderMove;
+            control.MouseUp+=HeaderUp;
         }
-        else
-        {
-            for(var i=0;i<_fields.Count;i++)SetRow(i,"","—");
-            _footer.Text="Local-only. No network requests.";
-        }
+        _tip.SetToolTip(_close,"Close TokenOverlay");
+        _tip.SetToolTip(_summary,"Drag to reposition · click for details");
+        _tip.SetToolTip(_header,"Drag to reposition · click for details");
+        RefreshLayout();
     }
-    private void SetRow(int i,string key,string value){_fields[i].Key.Text=key;_fields[i].Value.Text=value;}
-    private static string Truncate(string value,int max)=>value.Length>max?value[..(max-1)]+"…":value;
-    public void Toggle(){_expanded=!_expanded;UpdateLayout();}
-    private void UpdateLayout()
+
+    private void HeaderDown(object? sender,MouseEventArgs e)
     {
-        Height=_expanded?478:48;
+        if(e.Button!=MouseButtons.Left)return;
+        _dragStart=Control.MousePosition;
+        _formStart=Location;
+        _dragging=false;
+    }
+    private void HeaderMove(object? sender,MouseEventArgs e)
+    {
+        if((Control.MouseButtons&MouseButtons.Left)==0)return;
+        var delta=new Size(Control.MousePosition.X-_dragStart.X,
+            Control.MousePosition.Y-_dragStart.Y);
+        if(!_dragging && (Math.Abs(delta.Width)>6 || Math.Abs(delta.Height)>6))
+            _dragging=true;
+        if(_dragging)
+            Location=_formStart+delta;
+    }
+    private void HeaderUp(object? sender,MouseEventArgs e)
+    {
+        if(e.Button!=MouseButtons.Left)return;
+        if(_dragging)
+        {
+            _dragging=false;
+            DragCompleted?.Invoke(this,EventArgs.Empty);
+        }
+        else Toggle();
+    }
+
+    public void SetData(UsageSnapshot? data,SourceKind source)
+    {
+        var name=source.ToString();
+        _summary.Text=data is null
+            ? $"{name}  ·  No data"
+            : $"{name}  ·  {UsageSnapshot.FormatCount(data.Total)} tokens  ·  {data.TimeText}";
+        _caption.Text=data is null
+            ? "No matching local session — open a project"
+            : $"{name}  /  {Ellipsis(data.SessionName,37)}";
+        if(data is null)
+        {
+            foreach(var (key,value) in _fields){key.Text="";value.Text="";}
+            _footer.Text=source==SourceKind.Claude
+                ? "Claude Desktop cloud chats are not local Claude Code logs."
+                : "Source not found or no usable token records.";
+            return;
+        }
+
+        var fields=new (string,string)[]
+        {
+            ("Total consumed",UsageSnapshot.FormatCount(data.Total)),
+            ("Main session",data.Source==SourceKind.OpenCode?
+                UsageSnapshot.FormatCount(data.MainSessionTokens):"—"),
+            ("Child agents",data.Source==SourceKind.OpenCode?data.ChildSessions.ToString():"—"),
+            ("Input (uncached)",UsageSnapshot.FormatCount(data.Input)),
+            ("Cache read",UsageSnapshot.FormatCount(data.CacheRead)),
+            ("Cache write",UsageSnapshot.FormatCount(data.CacheWrite)),
+            ("Output",UsageSnapshot.FormatCount(data.Output)),
+            ("Reasoning",data.Source==SourceKind.Claude?"Included in output":UsageSnapshot.FormatCount(data.Reasoning)),
+            ("Context",data.ContextLimit>0?
+                $"{UsageSnapshot.FormatCount(data.ContextUsed)} / {UsageSnapshot.FormatCount(data.ContextLimit)}":"Unavailable"),
+            ("Last turn time",data.TimeText),
+            ("Cost",data.Cost is { } cost?
+                "$"+cost.ToString("0.0000",System.Globalization.CultureInfo.InvariantCulture):"Unavailable")
+        };
+        for(var i=0;i<fields.Length;i++)
+        {
+            _fields[i].Key.Text=fields[i].Item1;
+            _fields[i].Value.Text=fields[i].Item2;
+        }
+        _footer.Text=data.Note??"Local-only · read-only";
+    }
+
+    private static string Ellipsis(string value,int length)=>
+        value.Length<=length?value:value[..(length-1)]+"…";
+    private void Toggle(){_expanded=!_expanded;RefreshLayout();}
+    private void RefreshLayout()
+    {
+        Height=_expanded?ExpandedHeight:CompactHeight;
         _rows.Visible=_expanded;
         _caption.Visible=_expanded;
         _footer.Visible=_expanded;
         using var path=new GraphicsPath();
-        var radius=14;var d=radius*2;
-        var area=new Rectangle(0,0,Width,Height);
+        var box=new Rectangle(0,0,Width,Height);
+        var d=22;
         path.AddArc(0,0,d,d,180,90);
-        path.AddArc(area.Right-d,0,d,d,270,90);
-        path.AddArc(area.Right-d,area.Bottom-d,d,d,0,90);
-        path.AddArc(0,area.Bottom-d,d,d,90,90);
+        path.AddArc(box.Right-d,0,d,d,270,90);
+        path.AddArc(box.Right-d,box.Bottom-d,d,d,0,90);
+        path.AddArc(0,box.Bottom-d,d,d,90,90);
         path.CloseFigure();
-        Region?.Dispose();Region=new Region(path);
+        Region?.Dispose();
+        Region=new Region(path);
     }
 }

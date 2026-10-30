@@ -38,3 +38,9 @@ See the GitHub Actions build workflow for a repeatable cloud build.
 
 The overlay displays **Worked for**: the most recently started or completed Codex turn. During an active turn it counts upward from the recorded `task_started` timestamp; after completion it uses Codex's own `duration_ms` from `task_complete` (or the recorded timestamps when needed). Aborted turns are supported. This is **wall-clock agent work**, including tool and orchestration time, not raw model inference speed. When no valid timing event is in the local log tail, the display shows a dash. The user may choose Time as either compact field in the tray menu.
 
+
+## Claude Code Desktop support (Windows, v0.3.0)
+
+The same executable now follows **Codex Desktop** and **Claude Desktop** when their windows are in the foreground. For Claude it reads local JSONL transcripts from the user profile and Claude's local agent directory. It aggregates usage from distinct assistant message IDs (streaming chunks are de-duplicated) and reads `system / turn_duration / durationMs` for the last completed turn. During a running turn it uses the last real human user message timestamp for a live, approximate wall-clock timer.
+
+**Limitations:** Claude Code has no supported local desktop IPC API to report which idle conversation is selected. Therefore the overlay displays the **most recently modified local Claude transcript**, which may differ from the selected tab if multiple sessions are open. Cloud-only Claude sessions are not available through local transcripts. Claude does not provide a model context-window number in these log entries; context percentage is shown as unavailable rather than invented. No Claude account/API keys, hooks, extensions, or log uploads are required.

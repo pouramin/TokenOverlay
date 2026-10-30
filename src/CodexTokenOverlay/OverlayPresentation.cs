@@ -55,7 +55,7 @@ internal static class OverlayPresentationBuilder
                 secondaryField,
                 field => CreateMetric(snapshot, field, contextPercent)),
             contextPercent,
-            (visibleFields & DisplayField.ContextPercent) != 0,
+            (visibleFields & DisplayField.ContextPercent) != 0 && snapshot.ContextWindowTokens > 0,
             null);
     }
 
@@ -148,8 +148,10 @@ internal static class OverlayPresentationBuilder
             DisplayField.CacheHit => FormatTokenCount(snapshot.CachedInputTokens),
             DisplayField.CacheHitRate => $"{snapshot.CacheHitPercent:0}%",
             DisplayField.CacheMiss => FormatTokenCount(snapshot.UncachedInputTokens),
-            DisplayField.Context => $"{FormatTokenCount(snapshot.ContextUsedTokens)} / {FormatTokenCount(snapshot.ContextWindowTokens)}",
-            DisplayField.ContextPercent => $"{contextPercent:0}%",
+            DisplayField.Context => snapshot.ContextWindowTokens > 0
+                ? $"{FormatTokenCount(snapshot.ContextUsedTokens)} / {FormatTokenCount(snapshot.ContextWindowTokens)}"
+                : $"{FormatTokenCount(snapshot.ContextUsedTokens)} / N/A",
+            DisplayField.ContextPercent => snapshot.ContextWindowTokens > 0 ? $"{contextPercent:0}%" : NoValue,
             DisplayField.Reasoning => FormatTokenCount(snapshot.ReasoningOutputTokens),
             DisplayField.Thread => ShortThreadId(snapshot.ThreadId),
             DisplayField.Worked => FormatElapsed(snapshot.TurnTiming?.Elapsed(DateTimeOffset.UtcNow)),
@@ -159,6 +161,7 @@ internal static class OverlayPresentationBuilder
         {
             DisplayField.Thread => !string.IsNullOrWhiteSpace(snapshot.ThreadId),
             DisplayField.Worked => snapshot.TurnTiming?.Elapsed(DateTimeOffset.UtcNow) is not null,
+            DisplayField.ContextPercent => snapshot.ContextWindowTokens > 0,
             _ => true
         };
         return new OverlayMetric(field, labels.Compact, labels.Expanded, value, hasValue);

@@ -2,11 +2,15 @@ using System.Runtime.InteropServices;
 
 namespace CodexTokenOverlay;
 
+internal enum OverlayHostKind { Codex, Claude }
+
 internal sealed class OverlayContext : ApplicationContext
 {
     private readonly OverlaySettings _settings;
     private readonly CodexIpcActiveThreadMonitor _routeMonitor = new();
     private readonly TokenLogMonitor _monitor;
+    private readonly ClaudeSessionMonitor _claudeMonitor = new();
+    private OverlayHostKind _activeHost = OverlayHostKind.Codex;
     private readonly TokenStripForm _form = new();
     private readonly AttachmentTargetHighlightForm _targetHighlight = new();
     private readonly OverlayThemeBinding _themeBinding;
@@ -296,6 +300,27 @@ internal sealed class OverlayContext : ApplicationContext
             return;
         }
 
+        // The same tray companion follows the active coding desktop app.
+        var nextHost = CodexWindowLocator.TryGetForegroundCodexTarget(out _)
+            ? OverlayHostKind.Codex
+            : ClaudeWindowLocator.TryGetForegroundClaudeTarget(out _)
+                ? OverlayHostKind.Claude : _activeHost;
+        if (_activeHost != nextHost)
+        {
+            _activeHost = nextHost;
+            _lastSnapshot = null;
+            _pendingSnapshot = null;
+            _observedSessionVersion = -1;
+            _pendingSessionVersion = -1;
+            _observedThreadId = null;
+            _pendingThreadId = null;
+            _lastRenderedTurnSecond = -1;
+            _interaction.CollapseForHostChange();
+            _form.Hide();
+            RefreshPresentation();
+            UpdateSessionMenuText();
+        }
+        _pinSessionMenuItem.Enabled = _activeHost == OverlayHostKind.Codex && _lastSnapshot is not null;
         RequestBackgroundPoll();
 
         if (_pendingRouteStatus.Version != _observedRouteVersion)
@@ -322,7 +347,7 @@ internal sealed class OverlayContext : ApplicationContext
             var shortPendingId = string.IsNullOrWhiteSpace(_pendingThreadId)
                 ? "等待识别"
                 : OverlayPresentationBuilder.ShortThreadId(_pendingThreadId);
-            _pinSessionMenuItem.Enabled = !string.IsNullOrWhiteSpace(_pendingThreadId);
+            _pinSessionMenuItem.Enabled = _activeHost == OverlayHostKind.Codex && !string.IsNullOrWhiteSpace(_pendingThreadId);
             _presentation = OverlayPresentationBuilder.CreateWaiting(
                 $"等待会话 {shortPendingId} 的 token 数据…",
                 _settings.CollapsedPrimaryField,
@@ -338,9 +363,10 @@ internal sealed class OverlayContext : ApplicationContext
             _lastSnapshot = snapshot;
             RefreshPresentation();
             var shortId = OverlayPresentationBuilder.ShortThreadId(snapshot.ThreadId);
-            _pinSessionMenuItem.Enabled = true;
+            _pinSessionMenuItem.Enabled = _activeHost == OverlayHostKind.Codex;
+            var hostLabel = _activeHost == OverlayHostKind.Claude ? "Claude" : "Codex";
             _trayIcon.Text = TrimTrayText(
-                $"Codex {shortId} · {OverlayPresentationBuilder.FormatTokenCount(snapshot.TotalTokens)} tokens");
+                $"{hostLabel} {shortId} · {OverlayPresentationBuilder.FormatTokenCount(snapshot.TotalTokens)} tokens");
             UpdateSessionMenuText();
         }
 
@@ -357,10 +383,11 @@ internal sealed class OverlayContext : ApplicationContext
 
         if (_manualAttachment.IsEditing)
         {
+            CodexWindowTarget refreshedTarget;
             if (_currentTarget is null
-                || !CodexWindowLocator.TryRefreshKnownCodexTarget(
-                    _currentTarget,
-                    out var refreshedTarget))
+                || !(_activeHost == OverlayHostKind.Claude
+                    ? ClaudeWindowLocator.TryRefreshKnownClaudeTarget(_currentTarget, out refreshedTarget)
+                    : CodexWindowLocator.TryRefreshKnownCodexTarget(_currentTarget, out refreshedTarget)))
             {
                 CancelManualEditing(restoreFocus: false, relayout: false);
                 CollapseAndHide();
@@ -376,7 +403,11 @@ internal sealed class OverlayContext : ApplicationContext
             return;
         }
 
-        if (_manuallyHidden || !CodexWindowLocator.TryGetForegroundCodexTarget(out var target))
+        CodexWindowTarget target;
+        var hasTarget = _activeHost == OverlayHostKind.Claude
+            ? ClaudeWindowLocator.TryGetForegroundClaudeTarget(out target)
+            : CodexWindowLocator.TryGetForegroundCodexTarget(out target);
+        if (_manuallyHidden || !hasTarget)
         {
             CollapseAndHide();
             UpdateManualMenuState();
@@ -403,8 +434,19 @@ internal sealed class OverlayContext : ApplicationContext
         }
 
         var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+        var pollingHost = _activeHost;
         _ = Task.Run(() =>
             {
+                if (pollingHost == OverlayHostKind.Claude)
+                {
+                    var claude = _claudeMonitor.Poll();
+                    return (
+                        Host: pollingHost,
+                        Snapshot: claude,
+                        Version: _claudeMonitor.ActiveSessionVersion,
+                        ThreadId: _claudeMonitor.ActiveThreadId,
+                        RouteStatus: new ActiveThreadRouteStatus(null, 0, false, 0, null));
+                }
                 var routeStatus = _routeMonitor.GetStatus();
                 if (!_monitor.PinActiveSession)
                 {
@@ -419,6 +461,7 @@ internal sealed class OverlayContext : ApplicationContext
                 }
                 var snapshot = _monitor.Poll();
                 return (
+                    Host: pollingHost,
                     Snapshot: snapshot,
                     Version: _monitor.ActiveSessionVersion,
                     ThreadId: _monitor.ActiveThreadId,
@@ -428,7 +471,8 @@ internal sealed class OverlayContext : ApplicationContext
             {
                 try
                 {
-                    if (Volatile.Read(ref _disposed) == 0 && task.Status == TaskStatus.RanToCompletion)
+                    if (Volatile.Read(ref _disposed) == 0 && task.Status == TaskStatus.RanToCompletion
+                        && task.Result.Host == _activeHost)
                     {
                         _pendingSnapshot = task.Result.Snapshot;
                         _pendingSessionVersion = task.Result.Version;
@@ -447,7 +491,8 @@ internal sealed class OverlayContext : ApplicationContext
     {
         _presentation = _lastSnapshot is null
             ? OverlayPresentationBuilder.CreateWaiting(
-                "正在寻找当前 Codex 会话…",
+                _activeHost == OverlayHostKind.Claude
+                    ? "Finding local Claude Code session…" : "正在寻找当前 Codex 会话…",
                 _settings.CollapsedPrimaryField,
                 _settings.CollapsedSecondaryField,
                 _settings.VisibleFields)
@@ -526,7 +571,8 @@ internal sealed class OverlayContext : ApplicationContext
         CodexWindowInfo hostWindow,
         Point? manualCenter = null) => new(
         hostWindow,
-        _settings.AnchorMode,
+        _activeHost == OverlayHostKind.Claude && !_settings.ManualPlacementEnabled
+            ? AnchorMode.InsideTopRight : _settings.AnchorMode,
         _interaction.State == OverlayVisualState.Expanded,
         _presentation.ExpandedRows.Count,
         _presentation.ShowContextProgress,
@@ -540,9 +586,10 @@ internal sealed class OverlayContext : ApplicationContext
             return;
         }
 
-        if (!CodexWindowLocator.TryRefreshKnownCodexTarget(
-            _currentTarget,
-            out var refreshedTarget))
+        CodexWindowTarget refreshedTarget;
+        if (!(_activeHost == OverlayHostKind.Claude
+            ? ClaudeWindowLocator.TryRefreshKnownClaudeTarget(_currentTarget, out refreshedTarget)
+            : CodexWindowLocator.TryRefreshKnownCodexTarget(_currentTarget, out refreshedTarget)))
         {
             _currentTarget = null;
             UpdateManualMenuState();
@@ -914,7 +961,9 @@ internal sealed class OverlayContext : ApplicationContext
         var shortId = string.IsNullOrWhiteSpace(threadId)
             ? "等待识别"
             : OverlayPresentationBuilder.ShortThreadId(threadId);
-        _sessionMenuItem.Text = $"会话：{shortId}{RouteStatusSuffix(_pendingRouteStatus)}";
+        _sessionMenuItem.Text = _activeHost == OverlayHostKind.Claude
+            ? $"Claude: {shortId} · most recent local"
+            : $"会话：{shortId}{RouteStatusSuffix(_pendingRouteStatus)}";
     }
 
     private void ApplyTheme(OverlayThemePalette palette)

@@ -172,11 +172,11 @@ internal static class OverlayPresentationBuilder
         return field switch
         {
             DisplayField.Total => ("Total", "Total tokens"),
-            DisplayField.Input => ("In", "输In"),
-            DisplayField.Output => ("Out", "输Out"),
+            DisplayField.Input => ("In", "Input"),
+            DisplayField.Output => ("Out", "Output"),
             DisplayField.CacheHit => ("Hit", "Cache hits"),
             DisplayField.CacheHitRate => ("Hit rate", "Cache hit rate"),
-            DisplayField.CacheMiss => ("Miss", "缓存未Hit"),
+            DisplayField.CacheMiss => ("Miss", "Cache miss"),
             DisplayField.Context => ("Context", "Context usage"),
             DisplayField.ContextPercent => ("Context", "Context used"),
             DisplayField.Reasoning => ("Reasoning", "Reasoning output"),

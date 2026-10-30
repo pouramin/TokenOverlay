@@ -88,7 +88,7 @@ internal sealed class OverlayContext : ApplicationContext
         _cancelManualMenuItem = new ToolStripMenuItem("Cancel layout") { Visible = false };
         _cancelManualMenuItem.Click += (_, _) => CancelManualEditing();
         menu.Items.Add(_cancelManualMenuItem);
-        _resetManualMenuItem = new ToolStripMenuItem("Reset to Codex top right");
+        _resetManualMenuItem = new ToolStripMenuItem("Reset to top right");
         _resetManualMenuItem.Click += (_, _) => ResetManualPlacement();
         menu.Items.Add(_resetManualMenuItem);
 
@@ -350,7 +350,7 @@ internal sealed class OverlayContext : ApplicationContext
                 : OverlayPresentationBuilder.ShortThreadId(_pendingThreadId);
             _pinSessionMenuItem.Enabled = _activeHost == OverlayHostKind.Codex && !string.IsNullOrWhiteSpace(_pendingThreadId);
             _presentation = OverlayPresentationBuilder.CreateWaiting(
-                $"Waiting for session {shortPendingId}  token data...",
+                $"Waiting for session {shortPendingId} token data...",
                 _settings.CollapsedPrimaryField,
                 _settings.CollapsedSecondaryField,
                 _settings.VisibleFields);

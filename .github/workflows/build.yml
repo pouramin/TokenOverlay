@@ -20,6 +20,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Validate turn timer parser
+        shell: pwsh
+        run: dotnet run --project tests/TurnTimingSmoke/TurnTimingSmoke.csproj -c Release --nologo
+
       - name: Build project
         shell: pwsh
         run: dotnet build src/CodexTokenOverlay/CodexTokenOverlay.csproj -c Release --nologo
@@ -48,9 +52,9 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0
+          tag_name: v0.2.0
           target_commitish: ${{ github.sha }}
-          name: TunnelLab TokenOverlay v0.1.0
+          name: TunnelLab TokenOverlay v0.2.0
           body: "Unofficial Windows overlay built from MIT-licensed upstream project by soleillevant0125. Local token usage only; no telemetry."
           files: |
             TokenOverlay-win-x64.zip

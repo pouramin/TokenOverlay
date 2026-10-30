@@ -101,6 +101,7 @@ internal static class OverlayPresentationBuilder
             DisplayField.ContextPercent => "上下文百分比",
             DisplayField.Reasoning => "推理输出",
             DisplayField.Thread => "会话 ID",
+            DisplayField.Worked => "Response time (latest turn)",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "不支持的展示字段。")
         };
     }
@@ -151,9 +152,15 @@ internal static class OverlayPresentationBuilder
             DisplayField.ContextPercent => $"{contextPercent:0}%",
             DisplayField.Reasoning => FormatTokenCount(snapshot.ReasoningOutputTokens),
             DisplayField.Thread => ShortThreadId(snapshot.ThreadId),
+            DisplayField.Worked => FormatElapsed(snapshot.TurnTiming?.Elapsed(DateTimeOffset.UtcNow)),
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "不支持的展示字段。")
         };
-        var hasValue = field != DisplayField.Thread || !string.IsNullOrWhiteSpace(snapshot.ThreadId);
+        var hasValue = field switch
+        {
+            DisplayField.Thread => !string.IsNullOrWhiteSpace(snapshot.ThreadId),
+            DisplayField.Worked => snapshot.TurnTiming?.Elapsed(DateTimeOffset.UtcNow) is not null,
+            _ => true
+        };
         return new OverlayMetric(field, labels.Compact, labels.Expanded, value, hasValue);
     }
 
@@ -171,8 +178,20 @@ internal static class OverlayPresentationBuilder
             DisplayField.ContextPercent => ("上下文", "上下文占用"),
             DisplayField.Reasoning => ("推理", "推理输出"),
             DisplayField.Thread => ("会话", "会话"),
+            DisplayField.Worked => ("Time", "Worked for (latest turn)"),
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "不支持的展示字段。")
         };
+    }
+
+    public static string FormatElapsed(TimeSpan? elapsed)
+    {
+        if (elapsed is null) return NoValue;
+        var seconds = Math.Max(0L, (long)Math.Floor(elapsed.Value.TotalSeconds));
+        if (seconds < 60) return seconds.ToString(CultureInfo.InvariantCulture) + "s";
+        var minutes = seconds / 60;
+        var remainder = seconds % 60;
+        if (minutes < 60) return $"{minutes}m {remainder}s";
+        return $"{minutes / 60}h {minutes % 60}m";
     }
 
     private static string SanitizeSingleLine(string value)

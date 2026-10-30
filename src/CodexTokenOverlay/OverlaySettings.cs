@@ -24,7 +24,8 @@ internal enum DisplayField
     ContextPercent = 1 << 6,
     Reasoning = 1 << 7,
     Thread = 1 << 8,
-    CacheHitRate = 1 << 9
+    CacheHitRate = 1 << 9,
+    Worked = 1 << 10
 }
 
 internal enum CollapsedSlot { Primary, Secondary }
@@ -35,13 +36,13 @@ internal static class DisplayFieldRules
         DisplayField.Total | DisplayField.Input | DisplayField.Output |
         DisplayField.CacheHit | DisplayField.CacheMiss | DisplayField.Context |
         DisplayField.ContextPercent | DisplayField.Reasoning | DisplayField.Thread |
-        DisplayField.CacheHitRate;
+        DisplayField.CacheHitRate | DisplayField.Worked;
 
     public static readonly IReadOnlyList<DisplayField> Ordered = new[]
     {
         DisplayField.Total, DisplayField.Input, DisplayField.Output,
         DisplayField.CacheHit, DisplayField.CacheHitRate, DisplayField.CacheMiss, DisplayField.Context,
-        DisplayField.ContextPercent, DisplayField.Reasoning, DisplayField.Thread
+        DisplayField.ContextPercent, DisplayField.Worked, DisplayField.Reasoning, DisplayField.Thread
     };
 
     public static bool IsSingleSupported(DisplayField field)
@@ -84,7 +85,8 @@ internal sealed class OverlaySettings
         | DisplayField.CacheHitRate
         | DisplayField.CacheMiss
         | DisplayField.Context
-        | DisplayField.ContextPercent;
+        | DisplayField.ContextPercent
+        | DisplayField.Worked;
 
     private sealed class PersistedSettings
     {
@@ -105,7 +107,7 @@ internal sealed class OverlaySettings
         public double? OffsetYDip { get; set; }
     }
 
-    public const int CurrentSettingsVersion = 1;
+    public const int CurrentSettingsVersion = 2;
     public int SettingsVersion { get; private set; }
     public AnchorMode AnchorMode { get; set; }
     public DisplayField VisibleFields { get; set; }
@@ -123,7 +125,7 @@ internal sealed class OverlaySettings
             AnchorMode = AnchorMode.TitleBarTopRight,
             VisibleFields = DefaultVisibleFields,
             CollapsedPrimaryField = DisplayField.Total,
-            CollapsedSecondaryField = DisplayField.ContextPercent,
+            CollapsedSecondaryField = DisplayField.Worked,
             ManualPlacementEnabled = true,
             MainAttachment = ManualAttachmentRules.DefaultMainAttachment,
             OverlayScalePercent = ManualAttachmentRules.DefaultScalePercent
@@ -180,18 +182,23 @@ internal sealed class OverlaySettings
 
             var settings = CreateDefault();
             settings.AnchorMode = SanitizeAnchorMode(persisted.AnchorMode);
+            var upgradeTiming = persisted.SettingsVersion.Value < 2;
             settings.VisibleFields = DisplayFieldRules.SanitizeVisible(
-                (DisplayField)(persisted.VisibleFields ?? (int)DefaultVisibleFields));
+                (DisplayField)(persisted.VisibleFields ?? (int)DefaultVisibleFields)
+                | (upgradeTiming ? DisplayField.Worked : DisplayField.None));
+            var oldSecondary = (DisplayField)(persisted.CollapsedSecondaryField ?? (int)DisplayField.ContextPercent);
             settings.SetCollapsedFields(
                 (DisplayField)(persisted.CollapsedPrimaryField ?? (int)DisplayField.Total),
-                (DisplayField)(persisted.CollapsedSecondaryField ?? (int)DisplayField.ContextPercent));
+                upgradeTiming && oldSecondary == DisplayField.ContextPercent
+                    ? DisplayField.Worked
+                    : oldSecondary);
             settings.ManualPlacementEnabled = persisted.ManualPlacementEnabled ?? false;
             settings.MainAttachment = ManualAttachmentRules.SanitizeMain(
                 DeserializeAttachment(persisted.MainAttachment));
 
             settings.OverlayScalePercent = ManualAttachmentRules.SanitizeScale(
                 persisted.OverlayScalePercent);
-            return new OverlaySettingsLoadResult(settings, false);
+            return new OverlaySettingsLoadResult(settings, persisted.SettingsVersion.Value < CurrentSettingsVersion);
         }
         catch (JsonException)
         {

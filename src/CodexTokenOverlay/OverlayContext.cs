@@ -35,6 +35,7 @@ internal sealed class OverlayContext : ApplicationContext
     private ManualPlacementSnapshot? _settingsSnapshotBeforeEdit;
     private bool _saveFailureNotified;
     private TokenSnapshot? _lastSnapshot;
+    private long _lastRenderedTurnSecond = -1;
     private bool _manuallyHidden;
     private int _pollInFlight;
     private int _disposed;
@@ -317,6 +318,7 @@ internal sealed class OverlayContext : ApplicationContext
             _observedSessionVersion = _pendingSessionVersion;
             _observedThreadId = _pendingThreadId;
             _lastSnapshot = null;
+            _lastRenderedTurnSecond = -1;
             var shortPendingId = string.IsNullOrWhiteSpace(_pendingThreadId)
                 ? "等待识别"
                 : OverlayPresentationBuilder.ShortThreadId(_pendingThreadId);
@@ -340,6 +342,17 @@ internal sealed class OverlayContext : ApplicationContext
             _trayIcon.Text = TrimTrayText(
                 $"Codex {shortId} · {OverlayPresentationBuilder.FormatTokenCount(snapshot.TotalTokens)} tokens");
             UpdateSessionMenuText();
+        }
+
+        // Update the live timer once per second without waiting for a new token log event.
+        if (_lastSnapshot?.TurnTiming is { IsRunning: true } timing)
+        {
+            var seconds = (long)(timing.Elapsed(DateTimeOffset.UtcNow)?.TotalSeconds ?? -1);
+            if (seconds != _lastRenderedTurnSecond)
+            {
+                _lastRenderedTurnSecond = seconds;
+                RefreshPresentation();
+            }
         }
 
         if (_manualAttachment.IsEditing)

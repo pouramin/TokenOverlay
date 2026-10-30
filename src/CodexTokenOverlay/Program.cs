@@ -91,6 +91,8 @@ internal sealed record TokenSnapshot(
     long ContextWindowTokens,
     DateTime UpdatedAtUtc)
 {
+    public TurnTimingSnapshot? TurnTiming { get; init; }
+
     public double ContextPercent => ContextWindowTokens <= 0
         ? 0
         : Math.Clamp(ContextUsedTokens * 100d / ContextWindowTokens, 0, 100);
@@ -760,6 +762,7 @@ internal sealed class TokenLogMonitor : IDisposable
 
     private static TokenSnapshot? TryParseLatestTokenSnapshot(string text, string path, DateTime writeUtc)
     {
+        var latestTurn = TurnTimingParser.ParseLatest(text);
         var lines = text.Split('\n');
 
         for (var index = lines.Length - 1; index >= 0; index--)
@@ -811,7 +814,7 @@ internal sealed class TokenLogMonitor : IDisposable
                     GetLong(total, "reasoning_output_tokens"),
                     GetLong(last, "total_tokens"),
                     GetLong(info, "model_context_window"),
-                    writeUtc);
+                    writeUtc) { TurnTiming = latestTurn };
             }
             catch (Exception exception) when (exception is JsonException or InvalidOperationException)
             {

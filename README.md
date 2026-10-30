@@ -1,50 +1,49 @@
 # TunnelLab TokenOverlay
 
-A transparent, local-only token-usage overlay for Codex Desktop on Windows.
+A lightweight, **independently implemented** Windows 10/11 desktop overlay for **Codex Desktop**, **Claude Code**, and **OpenCode**. Token usage and task time directly on top of your active coding app. Created and maintained by TunnelLab.
 
-## Quick start
+## Features
 
-1. Open **Actions** in this repository and wait for **Build Windows** to finish.
-2. Download the **TokenOverlay-win-x64** artifact (ZIP).
-3. Extract the ZIP and run **CodexTokenOverlay.exe**.
-4. Open a Codex Desktop conversation. A compact floating token counter will follow the Codex window; click it to expand.
-5. Use the system tray icon to configure placement, shown metrics, or exit.
+- One English-only floating window for all 3 coding apps.
+- Compact view: platform, cumulative total tokens, elapsed time.
+- Expand by clicking the capsule to see input, cache read/write, output, reasoning, last-turn duration, recorded cost and context (where available).
+- Visible **×** button to exit, or system tray → **Exit TokenOverlay**.
+- Choose the source (Auto / Codex / Claude / OpenCode) and position (top / bottom right) from the tray.
+- Local-only. No account, API key, administrator access, analytics, or telemetry.
 
-No API key, cloud account, or administrator access is required. This is a standalone companion: it does not inject code into Codex Desktop.
+## OpenCode accounting
 
-## Displayed metrics
+The current OpenCode release stores session counters in a local SQLite database. We read it **read-only**, calculate each session's **cumulative** usage as:
 
-Session totals, input/output tokens, cached tokens, cache-hit rate, reasoning tokens (when available), and current context usage. The overlay is a **separate always-on-top window**, not an embedded feature of the Codex app. It **does not** measure per-message latency or token-generation speed.
+`input + cache.read + cache.write + output + reasoning`.
 
-## Privacy and security
+These counters are disjoint according to OpenCode's session implementation; no cache or reasoning double counting. The overlay separately displays **Main session** and **Total consumed**, which includes independently recorded child/subagent sessions if present.
 
-This Windows tool reads Codex session JSONL files in read-only mode and listens to Codex's local IPC to identify the selected conversation. No telemetry, analytics, remote API calls or upload features are included in the application. It does not modify Codex data. Session logs may contain private messages: **never upload them to issue trackers**.
+When the main session shows 23,345 tokens but a subagent consumed another 10,655, the combined total reads 34,000. **This is an illustrative example, not a claim about your actual usage.** A missing local record cannot be reconstructed, and totals may still differ from provider billing or upstream OpenCode stats.
 
-## Source and licensing
+## Data sources and limitations
 
-This is a clearly attributed Windows distribution of the open-source [Codex Token Overlay](https://github.com/soleillevant0125/codex-token-overlay) project by **soleillevant0125**, licensed under MIT. Its original copyright and license are preserved in [LICENSE](LICENSE). See [UPSTREAM.md](UPSTREAM.md) for the original documentation. This is *not* an OpenAI product, and the Codex Desktop JSONL/IPC formats may change.
+- Codex: local `~/.codex/sessions` JSONL, including recorded token counts and turn durations.
+- Claude Code: local `~/.claude/projects` JSONL, deduplicating assistant messages by ID and using `turn_duration` events.
+- OpenCode: read-only `~/.local/share/opencode/opencode.db` SQLite, using cumulative `session` counters. Honors `OPENCODE_DB`.
+- Selects the most recently updated local session, which may differ from the foreground conversation if several are open.
+- Cloud-only tasks and providers that do not write local usage cannot be measured.
+- Context percentage only appears when an explicit context limit is in the source log. OpenCode's cumulative total must **never** be described as context usage.
+- Elapsed time includes tools/agent orchestration; it is not model tokens-per-second throughput.
 
-## Build from source
+## Installation
 
-Requires the .NET 10 SDK for Windows.
+Open [Releases](../../releases), download `TunnelLab-TokenOverlay-win-x64.zip`, unzip, and run `TokenOverlay.exe`. The build is standalone and does not require a separate .NET runtime.
+
+The app is not code-signed. Verify the release checksum and scan the executable before using third-party binaries.
+
+## Building
+
+Requires .NET 10 SDK:
 
 ```powershell
-dotnet publish src/CodexTokenOverlay/CodexTokenOverlay.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist
+dotnet run --project tests/Smoke/Smoke.csproj -c Release
+dotnet publish src/TunnelLabOverlay/TokenOverlay.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist
 ```
 
-See the GitHub Actions build workflow for a repeatable cloud build.
-
-### Per-turn response time
-
-The overlay displays **Worked for**: the most recently started or completed Codex turn. During an active turn it counts upward from the recorded `task_started` timestamp; after completion it uses Codex's own `duration_ms` from `task_complete` (or the recorded timestamps when needed). Aborted turns are supported. This is **wall-clock agent work**, including tool and orchestration time, not raw model inference speed. When no valid timing event is in the local log tail, the display shows a dash. The user may choose Time as either compact field in the tray menu.
-
-
-## Claude Code Desktop support (Windows, v0.3.0)
-
-The same executable now follows **Codex Desktop** and **Claude Desktop** when their windows are in the foreground. For Claude it reads local JSONL transcripts from the user profile and Claude's local agent directory. It aggregates usage from distinct assistant message IDs (streaming chunks are de-duplicated) and reads `system / turn_duration / durationMs` for the last completed turn. During a running turn it uses the last real human user message timestamp for a live, approximate wall-clock timer.
-
-**Limitations:** Claude Code has no supported local desktop IPC API to report which idle conversation is selected. Therefore the overlay displays the **most recently modified local Claude transcript**, which may differ from the selected tab if multiple sessions are open. Cloud-only Claude sessions are not available through local transcripts. Claude does not provide a model context-window number in these log entries; context percentage is shown as unavailable rather than invented. No Claude account/API keys, hooks, extensions, or log uploads are required.
-
-## v0.4.0: English UI and exit button
-
-All user-facing overlay labels and tray menu actions are now English. The expanded **Token Details** panel has a visible **X** at its top right. Clicking X exits TokenOverlay (not Codex or Claude). To quit without opening the expanded panel, right-click the TokenOverlay system tray icon and choose **Exit TokenOverlay**. The compact timer label stays **Time**; the expanded label is **Worked for**.
+The source does not copy the old overlay implementation. Older release tags and their respective source history remain accessible independently.

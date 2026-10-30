@@ -1,4 +1,4 @@
-name: Build Windows
+name: Build TunnelLab TokenOverlay (Windows)
 
 on:
   push:
@@ -12,54 +12,48 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET 10
+      - name: Install .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
-      - name: Validate turn timer parser
+      - name: Test independent data readers
         shell: pwsh
-        run: dotnet run --project tests/TurnTimingSmoke/TurnTimingSmoke.csproj -c Release --nologo
+        run: dotnet run --project tests/Smoke/Smoke.csproj -c Release --nologo
 
-      - name: Test Claude transcript parser
+      - name: Build
         shell: pwsh
-        run: dotnet run --project tests/ClaudeSmoke/ClaudeSmoke.csproj -c Release --nologo
+        run: dotnet build src/TunnelLabOverlay/TokenOverlay.csproj -c Release --nologo
 
-      - name: Build project
+      - name: Publish standalone Windows executable
         shell: pwsh
-        run: dotnet build src/CodexTokenOverlay/CodexTokenOverlay.csproj -c Release --nologo
+        run: dotnet publish src/TunnelLabOverlay/TokenOverlay.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true --nologo -o dist
 
-      - name: Publish Windows standalone
-        shell: pwsh
-        run: dotnet publish src/CodexTokenOverlay/CodexTokenOverlay.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true --nologo -o dist
-
-      - name: Package ZIP and SHA256
+      - name: ZIP and SHA256
         shell: pwsh
         run: |
-          Compress-Archive -Path dist/* -DestinationPath TokenOverlay-win-x64.zip -Force
-          $hash = (Get-FileHash -Algorithm SHA256 TokenOverlay-win-x64.zip).Hash.ToLowerInvariant()
-          "$hash  TokenOverlay-win-x64.zip" | Set-Content -Path TokenOverlay-win-x64.zip.sha256 -Encoding ascii
+          Compress-Archive -Path dist/* -DestinationPath TunnelLab-TokenOverlay-win-x64.zip -Force
+          $hash = (Get-FileHash -Algorithm SHA256 TunnelLab-TokenOverlay-win-x64.zip).Hash.ToLowerInvariant()
+          "$hash  TunnelLab-TokenOverlay-win-x64.zip" | Set-Content -Path TunnelLab-TokenOverlay-win-x64.zip.sha256 -Encoding ascii
           Write-Host "ZIP SHA256: $hash"
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: TokenOverlay-win-x64
+          name: TunnelLab-TokenOverlay-Windows
           path: |
-            TokenOverlay-win-x64.zip
-            TokenOverlay-win-x64.zip.sha256
+            TunnelLab-TokenOverlay-win-x64.zip
+            TunnelLab-TokenOverlay-win-x64.zip.sha256
 
       - name: Publish release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.4.0
+          tag_name: v1.0.0
           target_commitish: ${{ github.sha }}
-          name: TunnelLab TokenOverlay v0.4.0
-          body: "Unofficial Windows overlay built from MIT-licensed upstream project by soleillevant0125. Local token usage only; no telemetry."
+          name: TunnelLab TokenOverlay v1.0.0
+          body: "Independent WinForms rewrite. Supports Codex Desktop, Claude Code, and OpenCode. OpenCode displays main-session and cumulative totals including child agent sessions. Local-only, read-only."
           files: |
-            TokenOverlay-win-x64.zip
-            TokenOverlay-win-x64.zip.sha256
+            TunnelLab-TokenOverlay-win-x64.zip
+            TunnelLab-TokenOverlay-win-x64.zip.sha256

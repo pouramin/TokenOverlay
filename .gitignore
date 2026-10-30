@@ -1,5 +1,1 @@
-**/bin/
-**/obj/
-dist/
-*.zip
-.vs/
+**/bin/\n**/obj/\ndist/\n*.zip\n.vs/\n

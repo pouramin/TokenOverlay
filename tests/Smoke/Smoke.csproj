@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+<ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+<ItemGroup>
+<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+<Compile Include="../../src/TunnelLabOverlay/Models.cs" Link="Models.cs" />
+<Compile Include="../../src/TunnelLabOverlay/OpenCodeReader.cs" Link="OpenCodeReader.cs" />
+<Compile Include="../../src/TunnelLabOverlay/TranscriptReader.cs" Link="TranscriptReader.cs" />
+</ItemGroup>
+</Project>
